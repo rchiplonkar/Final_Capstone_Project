@@ -1,0 +1,61 @@
+------------------------------------------------------------------------
+[2026-08-29T17:05:21] QUERY 1: What is the central idea of program synthesis and how does the sketching approach help generate correct programs from partial specifications?
+retrieved=[('DBLP_journals_corr_0002S16', 17.0), ('DBLP_conf_cav_ChaudhuriS12', 16.0), ('DBLP_conf_oopsla_PuNSB16', 16.0)]
+answer=Grounded evidence from the retrieved corpus:
+
+[DBLP_journals_corr_0002S16] . This paper addresses the problem of creating simpliﬁers for logic formulas based on conditional term rewriting. In particular, the paper focuses on a program synthesis application where formula simpli- ﬁcations have been shown to have a signiﬁcant impact. We show that by combining machine learning techniques with constraint-based synthesis, it is possible to synthesize a formula simpl
+
+[DBLP_journals_corr_0002S16] Automatic Generation of Formula Simpliﬁers based on Conditional Rewrite Rules Rohit Singh, Armando Solar-Lezama Massachusetts Institute of Technology rohitsingh@csail.mit.edu asolar@csail.mit.edu Abstract. This paper addresses the problem of creating simpliﬁers for logic formulas based on conditional term rewriting. In particular, the paper focuses on a program synthesis application where formula 
+
+[DBLP_conf_cav_ChaudhuriS12] Euler Programming Euler: Parallel Parking. Euler can be downloaded from http://www.cs.rice.edu/~swarat/Euler. Now we show to use the system to solve a program synthesis problem that reduces to numerical optimization. The goal here is to design a controller for parallel-parking a car. The pro- grammer knows what such a controller should do at a high level: it should start by driving the
+
+[DBLP_conf_oopsla_PuNSB16] e of the art approach which requires manual, problem speciﬁc correction strategies. Categories and Subject Descriptors I.2.2 [Automatic Program- ming - Program synthesis ]: I.2.7 Natural Language Processing - Language Models Keywords language model, MOOCs, code repair and completion 1. Introduction Massive open online courses (MOOCs) have become a popular way of teaching programming. Ac
+------------------------------------------------------------------------
+[2026-08-29T17:05:21] QUERY 2: Compare the program-synthesis papers that discuss sketching, specification-driven generation, and the reliability of synthesized code.
+retrieved=[('DBLP_conf_icml_GuJLSESS25', 11.0), ('DBLP_journals_corr_abs-1711-11438', 11.0), ('DBLP_conf_iclr_OlaussonIW0S24', 10.0)]
+answer=Grounded evidence from the retrieved corpus:
+
+[DBLP_conf_icml_GuJLSESS25] capabilities of a human software engineer. 2.1. Code Generation Code generation is the task of generating code from a speci- fication. In code completion, the specification takes the form of a preexisting code snippet, and the goal is to complete the snippet. There are two popular paradigms for code com- pletion: tab completion, where the user can press the tab key to complete a block of c
+
+[DBLP_conf_icml_GuJLSESS25] Position: Future Research and Challenges Remain Towards AI for Software Engineering Alex Gu 1 Naman Jain 2 * Wen-Ding Li 3 * Manish Shetty 2 * Kevin Ellis 3 Koushik Sen 2 Armando Solar-Lezama 1 Abstract AI for software engineering has made remark- able progress, becoming a notable success within generative AI. Despite this, there are still many challenges that need to be addressed before au- tomat
+
+[DBLP_journals_corr_abs-1711-11438] m for comparing different approaches for solving theSyntax-Guided Synthesis (SyGuS) problem. A SyGuS problem takes as input a logical speciﬁcation ϕ for what a synthesized function f should compute, and a grammar G providing syntactic restrictions on the function f to be synthesized. Formally, a solution to a SyGuS instance (ϕ,G, f ) is a function fimp that is expressible in the grammar G
+
+[DBLP_conf_iclr_OlaussonIW0S24] can be achieved with human-level debugging. 1 I NTRODUCTION Large language models (LLMs) have proven capable of generating code snippets from natural language specifications, but still struggle on complex coding challenges such as those found in competitions and professional software engineering interviews. Recent work has sought to improve performance by leveraging self-repair (Gupta et a
+------------------------------------------------------------------------
+[2026-08-29T17:05:21] QUERY 3: Which papers in this corpus discuss whether code models can recognize their own incorrect or unreliable generations?
+retrieved=[('DBLP_conf_acl_GuLJOLSS24', 12.0), ('DBLP_conf_emnlp_OlaussonGLZSTL23', 12.0), ('DBLP_journals_corr_abs-2402-19475', 12.0)]
+answer=Grounded evidence from the retrieved corpus:
+
+[DBLP_conf_acl_GuLJOLSS24] 117 August 11-16, 2024 ©2024 Association for Computational Linguistics The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations? Alex Gu1 Wen-Ding Li⋆2 Naman Jain⋆3 Theo X. Olausson⋆1 Celine Lee⋆2 Koushik Sen3 Armando Solar-Lezama1 1MIT CSAIL 2Cornell University 3University of California, Berkeley {gua, theoxo}@mit.edu, {wl678, cl923}@cornell.ed
+
+[DBLP_conf_acl_GuLJOLSS24] Findings of the Association for Computational Linguistics: ACL 2024 , pages 74–117 August 11-16, 2024 ©2024 Association for Computational Linguistics The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations? Alex Gu1 Wen-Ding Li⋆2 Naman Jain⋆3 Theo X. Olausson⋆1 Celine Lee⋆2 Koushik Sen3 Armando Solar-Lezama1 1MIT CSAIL 2Cornell University 3University of
+
+[DBLP_conf_emnlp_OlaussonGLZSTL23] before generating the final answer (Nye et al., 2021; Wei et al., 2022; Kojima et al., 2022; Wang et al., 2023b). However, this reasoning ability appears to be unreliable for tasks that require reasoning out of domain (Liang et al., 2022; Saparov et al., 2023), understanding negation (Anil et al., 2022), and following long reasoning chains (Dziri et al., 2023). Furthermore, while the sta
+
+[DBLP_journals_corr_abs-2402-19475] The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations? Alex Gu gua@mit.edu MIT CSAIL Wen-Ding Li⋆ wl678@cornell.edu Cornell University Naman Jain⋆ naman jain@berkeley.edu University of California, Berkeley Theo X. Olausson ⋆ theoxo@csail.mit.edu MIT CSAIL Celine Lee⋆ cl923
+------------------------------------------------------------------------
+[2026-08-29T17:05:22] QUERY 4: What does the corpus say about the relationship between program synthesis and trusted, correct code generation?
+retrieved=[('DBLP_journals_pacmpl_BowersOWGTES23', 12.0), ('DBLP_conf_icml_NyeHTS19', 11.0), ('DBLP_conf_oopsla_PuNSB16', 11.0)]
+answer=Grounded evidence from the retrieved corpus:
+
+[DBLP_journals_pacmpl_BowersOWGTES23] 41 Top-Down Synthesis for Library Learning MATTHEW BOWERS, Massachusetts Institute of Technology, USA THEO X. OLAUSSON, Massachusetts Institute of Technology, USA LIONEL WONG, Massachusetts Institute of Technology, USA GABRIEL GRAND, Massach
+
+[DBLP_journals_pacmpl_BowersOWGTES23] 41 Top-Down Synthesis for Library Learning MATTHEW BOWERS, Massachusetts Institute of Technology, USA THEO X. OLAUSSON, Massachusetts Institute of Technology, USA LIONEL WONG, Massachusetts Institute of Technology, USA GABRIEL GRAND, Massachusetts Institute of Technology, USA JOSHUA B. TENENBAUM, Massachusetts Institute of Technology, USA KEVIN ELLIS, Cornell University, USA ARMANDO SOLAR-LEZAMA, 
+
+[DBLP_conf_icml_NyeHTS19] eshold time. 3. Our Approach: Learning to Infer Sketches 3.1. System Overview: Our approach, inspired by work such as Murali et al. (2017), is to represent the relationship between program speciﬁca- tion and program using an intermediate representation called a program sketch. However in contrast to previous work, where the division of labor between generating sketches and ﬁlling them in i
+
+[DBLP_conf_oopsla_PuNSB16] entation, we use beamsearch, a deterministic algorithm that is guaranteed to return high probability statements instead of actual sampling. Candidate Statement Generation: For Partial Fragment 3, our model produces the following candidate statements, alon
+------------------------------------------------------------------------
+[2026-08-29T17:05:23] QUERY 5: Which retrieval results best support a user who wants to understand program synthesis, sketching, and code generation reliability together?
+retrieved=[('DBLP_journals_corr_abs-1903-03229', 15.0), ('DBLP_journals_pacmpl_FeserM0S20', 15.0), ('DBLP_conf_cav_ChaudhuriS12', 13.0)]
+answer=Grounded evidence from the retrieved corpus:
+
+[DBLP_journals_corr_abs-1903-03229] compilation techniques from state-of-the-art in-memory databases [25] with a deductive synthesis approach for generating specialized data structures. To better understand the scenarios thatCastor supports, consider these two use cases. First, consider a company which maintains a web dashboard for displaying internal analytics from data that is aggregated nightly. The queries used to con-
+
+[DBLP_journals_corr_abs-1903-03229] Deductive Optimization of Relational Data Storage John K. Feser CSAIL MIT Cambridge, MA, USA feser@csail.mit.edu Samuel Madden CSAIL MIT Cambridge, MA, USA madden@csail.mit.edu Nan Tang Qatar Computing Research Institute QCRI HBKU Doha, Qatar ntang@hbku.edu.qa Armando Solar-Lezama CSAIL MIT Cambridge, MA, USA asolar@csail.mit.edu Abstract Optimizing the physical data storage and retrieval of data 
+
+[DBLP_journals_pacmpl_FeserM0S20] compilation techniques from state-of-the-art in-memory databases [25] with a deductive synthesis approach for generating specialized data structures. To better understand the scenarios thatCastor supports, consider these two use cases. First, consider a company which maintains a web dashboard for displaying internal analytics from data that is aggregated nightly. The queries used to con-
+
+[DBLP_conf_cav_ChaudhuriS12] Euler Programming Euler: Parallel Parking. Euler can be downloaded from http://www.cs.rice.edu/~swarat/Euler. Now we show to use the system to solve a program synthesis problem that reduces to numerical optimization. The goal here is to design a controller for parallel-parking a car. The pro- grammer knows what such a controller should do at a high level: it should start by driving the
+------------------------------------------------------------------------
