@@ -1,0 +1,229 @@
+[2026-09-23T23:12:21]  GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   How do program synthesis, sketching, and verification work together to improve reliability in code generation?
+RESPONSE: The documents suggest that these techniques work together as follows:
+
+- **Program synthesis** searches for code that satisfies a specification. For example, Sketch “*is an open source system for synthesis from partial programs*,” and it “*finds a completion for the holes that satisfies the assertions for all inputs*.”
+- **Sketching** provides the *partial program* or template, with “holes” to fill in. In the Euler paper, the partial program “*encodes our partial knowledge*,” and “*the terms ?? in the code are ‘holes’*” that synthesis must fill.
+- **Verification** checks whether the generated or repaired code is correct. In Sketch, the synthesizer derives a logical predicate and then solves it; in the self-repair paper, generated code is “*checked against the unit tests*” and an error message is produced before repair.
+
+Together, they improve reliability by combining:
+1. a **structured template** for the code,
+2. an **automated search** for candidate completions,
+3. and a **formal or test-based check** that filters out incorrect solutions.
+
+The documents also emphasize that this is used to make code generation more robust: Sketch “*uses symbolic execution to derive a predicate*” and then solves it, while the self-repair workflow uses execution and feedback to “*debug the code*.” In the formula-simplification paper, similar reasoning is used in solver-based tools, where simplification “*has a tremendous impact on the size of the formulas*” and improves performance.
+
+So, in short: **sketching defines the space of possible programs, synthesis fills it in, and verification ensures the result meets the specification**.
+------------------------------------------------------------------------
+[2026-09-23T23:12:21]  PLAN  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   my_advanced_plan
+RESPONSE: {
+  "technique": "both",
+  "node_types": [
+    "paper",
+    "topic"
+  ],
+  "edge_types": [
+    "links_to",
+    "relates_to"
+  ],
+  "test_queries": [
+    "Which papers in this corpus explain program synthesis and how sketching fills missing parts of a program?",
+    "What research discusses whether code models can recognize their own incorrect generations and why reliability is still a problem?",
+    "Compare papers that blend synthesis with verification, trust, and correctness to see how the field makes generated code more reliable."
+  ],
+  "rationale": "The Research Paper Navigator corpus contains long technical PDFs with strong topical overlap, so query decomposition helps break multi-aspect questions apart while graph expansion (via shared topics and document links) brings in adjacent papers that share concepts without matching the original wording exactly."
+}
+------------------------------------------------------------------------
+[2026-09-23T23:12:24]  EVAL_Q1_BASELINE  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   What is the central idea of program synthesis and how does the sketching approach help generate correct programs from partial specifications?
+RESPONSE: retrieved=['DBLP_conf_mapl_GottschlichSTCR18', 'DBLP_journals_corr_0002S16', 'DBLP_journals_corr_abs-1803-07244'] verdict=pass
+The documents say that, for program synthesis, “the modern approach has been to frame invention as a search problem where, given a space of candidate programs, the goal is to search for one that satisfies a set of constraints on the desired behavior.”
+
+They also describe Sketch as a “system for synthesis from partial programs.” A partial program, or “sketch,” is “a program with holes, where the potential code to complete the holes is drawn from a finite set of candidates.” Given “a partial program with a set of assertions,” Sketch “finds a completion for the holes that satisfies the assertions for all inputs from a given input space.”
+
+So, the central idea is:  
+- search over candidate programs, and  
+- use constraints/specifications to pick a program that satisfies the desired behavior.
+
+The sketching approach helps by letting the programmer provide only a partial program and assertions; the synthesizer then fills in the holes with code that makes the program correct with respect to those specifications.
+------------------------------------------------------------------------
+[2026-09-23T23:12:29]  EVAL_Q1_DECOMPOSITION  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   What is the central idea of program synthesis and how does the sketching approach help generate correct programs from partial specifications?
+RESPONSE: retrieved=['DBLP_journals_corr_0002S16', 'DBLP_conf_cidr_CheungAMSM13', 'DBLP_conf_cav_ChaudhuriS12'] verdict=fail
+The documents do not give a single direct definition of “the central idea of program synthesis,” but they do explain how the sketching approach works.
+
+From the Euler paper: “The input language of Euler is essentially the same as in the Sketch programming synthesis system” and the idea is to use a “parameterized program—a sketch—that reﬂects the programmer’s partial knowledge.” The holes in the sketch are placeholders for unknown parts of the program, and the synthesis system “will ﬁnd appropriate values for them.”
+
+More generally, the Sketch-based approach uses a partial program plus constraints/assertions, then searches for a completion that satisfies them. In the StatusQuo paper, a similar synthesis process is described as using program analysis and synthesis to infer a relational specification, and “the algorithm performs the search symbolically,” where “the technology for taking a template and performing a symbolic search over all the possible ways to complete the template is the basis for a great deal of recent research in software synthesis.”
+
+So, in the words of the documents, sketching helps by:
+- representing a program as a “sketch” with “holes” for unknowns,
+- using the programmer’s partial knowledge to constrain those holes,
+- and then automatically searching for values or expressions that make the completed program satisfy the desired assertions/specification.
+
+If you want, I can also answer this in a shorter, more textbook-style way.
+------------------------------------------------------------------------
+[2026-09-23T23:12:32]  EVAL_Q1_GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   What is the central idea of program synthesis and how does the sketching approach help generate correct programs from partial specifications?
+RESPONSE: retrieved={'DBLP_journals_corr_0002S16': 'seed', 'DBLP_conf_mapl_GottschlichSTCR18': 'seed', 'DBLP_conf_cav_GaoKDRSAK19': 'linked'} verdict=pass
+The documents describe program synthesis as generating a program by searching a space of candidates so that the result satisfies a specification. In the machine-programming paper, this is summarized as:
+
+> “the goal is to search for one that satisfies a set of constraints on the desired behavior”  
+> and Sketch is described as a system for “synthesis from partial programs.”
+
+The sketching approach helps by letting the user write a **partial program** with holes instead of a complete program:
+
+> “A partial program (also called a sketch) is a program with holes, where the potential code to complete the holes is drawn from a finite set of candidates...”
+
+Then, given assertions, Sketch finds a completion that works for all inputs:
+
+> “Given a partial program with a set of assertions, the Sketch synthesizer finds a completion for the holes that satisfies the assertions for all inputs from a given input space.”
+
+So, the central idea is to **automatically fill in missing pieces of a program so that the completed program meets the specification**. The sketching approach makes this feasible by restricting the search to a finite set of candidate expressions or grammar rules, which guides the synthesizer toward a correct completion.
+------------------------------------------------------------------------
+[2026-09-23T23:12:35]  EVAL_Q2_BASELINE  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   In the paper 'The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?' what do the authors conclude about whether code models can recognize their own incorrect generations?
+RESPONSE: retrieved=['DBLP_journals_corr_abs-2402-19475', 'DBLP_conf_acl_GuLJOLSS24', 'DBLP_conf_cikm_CheungSM12'] verdict=pass
+The authors conclude that code language models generally **cannot reliably recognize their own incorrect generations**.
+
+They write that “**most models have a very shallow understanding of counterfeits**” and that “**models frequently misjudge counterfeit samples as correct**.” They also say that “**counterfeits from a given model are just as confusing to the model itself as they are to other models**.”
+
+So, in short: models often fail to tell that their own subtly wrong code is incorrect.
+------------------------------------------------------------------------
+[2026-09-23T23:12:39]  EVAL_Q2_DECOMPOSITION  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   In the paper 'The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?' what do the authors conclude about whether code models can recognize their own incorrect generations?
+RESPONSE: retrieved=['DBLP_journals_corr_abs-2402-19475', 'DBLP_conf_acl_GuLJOLSS24', 'DBLP_conf_iclr_OlaussonIW0S24'] verdict=pass
+The authors conclude that code models generally **cannot reliably recognize their own incorrect generations**. They say that “most models have a very shallow understanding of counterfeits” and that models often:
+
+- “mistakenly classify them as correct,”
+- are “worse at reasoning about the execution behaviour of counterfeits,” and
+- “cannot reliably repair counterfeit samples.”
+
+They also note that “counterfeits from a given model are just as confusing to the model itself as they are to other models,” so a model does **not** seem to have special insight into its own bad outputs.
+------------------------------------------------------------------------
+[2026-09-23T23:12:42]  EVAL_Q2_GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   In the paper 'The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?' what do the authors conclude about whether code models can recognize their own incorrect generations?
+RESPONSE: retrieved={'DBLP_journals_corr_abs-2402-19475': 'seed', 'DBLP_conf_acl_GuLJOLSS24': 'seed', 'DBLP_conf_cav_SinghS12': 'linked'} verdict=pass
+The authors conclude that code models generally **cannot reliably recognize their own incorrect generations**.
+
+They write that “**most models have a very shallow understanding of counterfeits**” and that models “**frequently misjudge counterfeit samples as correct**.” They also say that models are “**much worse at reasoning about the execution of counterfeits**” and often “**execute counterfeit programs as if they had the semantics of a correct program**.” For repair, they find that “**the likelihood of a model successfully repairing a counterfeit example is often even lower than that of generating a correct program from scratch**.”
+
+So overall, their conclusion is that code language models have a **shallow, unreliable understanding of their own incorrect outputs**, and that caution is needed “**when relying on models to understand their own samples**.”
+------------------------------------------------------------------------
+[2026-09-23T23:12:45]  EVAL_Q3_BASELINE  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   How does the paper 'Program Synthesis from Polymorphic Refinement Types' justify using refinement types in synthesis?
+RESPONSE: retrieved=['DBLP_journals_corr_InalaQLS15', 'DBLP_journals_corr_PolikarpovaYIS16', 'DBLP_journals_pacmpl_PolikarpovaSYIH20'] verdict=fail
+The provided documents do not contain a paper titled **“Program Synthesis from Polymorphic Refinement Types”**, so I can’t quote its exact justification directly.
+
+If you meant the synthesis paper in the documents, **“Synthesis of Recursive ADT Transformations from Reusable Templates”**, it justifies using type information to make synthesis more reusable and scalable. In particular, it says:
+
+- “**our generic templates provide the same performance benefits during synthesis as conventional, program-specific templates**”
+- “**even though the reusable template is much more concise than the Sketch template, it does not increase the size of the search space that the synthesizer has to consider, since all the additional choices are resolved during type inference**”
+
+So, based on the provided text, the justification is that type information lets the system:
+1. keep templates concise and reusable, and
+2. avoid enlarging the synthesis search space because choices are resolved by type inference.
+
+If you want, I can also summarize how the Lifty paper uses **liquid/refinement types** for information-flow control, but that is a different topic from synthesis.
+------------------------------------------------------------------------
+[2026-09-23T23:12:49]  EVAL_Q3_DECOMPOSITION  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   How does the paper 'Program Synthesis from Polymorphic Refinement Types' justify using refinement types in synthesis?
+RESPONSE: retrieved=['DBLP_conf_cav_GaoKDRSAK19', 'DBLP_journals_corr_PolikarpovaYIS16', 'DBLP_journals_pacmpl_PolikarpovaSYIH20'] verdict=fail
+I can’t answer that from the provided documents.
+
+The documents you gave are about **CAV 2019** and **Lifty / Liquid Information Flow Control**, but they do **not** include the paper **“Program Synthesis from Polymorphic Refinement Types”** or its justification for using refinement types in synthesis.
+
+If you want, I can answer a related question based only on the Lifty document, such as how it justifies using **liquid refinement types** for information-flow control and repair.
+------------------------------------------------------------------------
+[2026-09-23T23:12:52]  EVAL_Q3_GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   How does the paper 'Program Synthesis from Polymorphic Refinement Types' justify using refinement types in synthesis?
+RESPONSE: retrieved={'DBLP_journals_corr_PolikarpovaYIS16': 'seed', 'DBLP_journals_corr_InalaQLS15': 'seed', 'DBLP_conf_cav_GaoKDRSAK19': 'linked'} verdict=fail
+The provided documents do not contain the paper **“Program Synthesis from Polymorphic Refinement Types.”**  
+
+The closest related paper in the documents is **“Synthesis of Recursive ADT Transformations from Reusable Templates,”** which says synthesis benefits from **“polymorphic synthesis constructs”** and **“type-directed expansion,”** but it does not justify using refinement types in synthesis in the way your question asks.
+
+From the Lifty paper, refinement types are used for a different purpose: to encode information flow control, e.g. it says liquid types are **“an expressive yet decidable type system”** and **“enable fully automatic checking of complex, data dependent policies.”** But that is not about program synthesis from polymorphic refinement types.
+
+So, based on the provided documents, I can’t answer how that specific paper justifies using refinement types in synthesis without guessing.
+------------------------------------------------------------------------
+[2026-09-23T23:12:56]  EVAL_Q4_BASELINE  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Compare how the sketching approach and the counterfeit-generation paper frame the problem of reliable code generation.
+RESPONSE: retrieved=['DBLP_journals_corr_0002S16', 'DBLP_conf_cvpr_WillisJCT0GSTLS22', 'DBLP_conf_iclr_JainHGLYZWSSS25'] verdict=fail
+The documents do not contain a paper about “counterfeit-generation,” so I can only compare the Sketch paper with the LIVECODEBENCH paper.
+
+The **Sketching / formula-simplification paper** frames the problem as one of making a solver/synthesizer practical by simplifying formulas before solving. It says that “**formula simplification plays a key role in SMT solvers and solver-based tools**” and that without simplification, “**problems that solve in seconds time-out instead**.” Its focus is on automatically generating a domain-specific simplifier: “**we present a methodology for automatically generating a formula simplifier from a corpus of benchmark problems**.” So the reliability issue is about improving the efficiency and correctness of the synthesis pipeline by learning rewrite rules tailored to a domain.
+
+The **LIVECODEBENCH paper** frames reliable code generation as an **evaluation problem** for LLMs. It argues that existing benchmarks are inadequate because they suffer from “**data contamination, overfitting, saturation, and focus on merely code generation**,” and proposes “**a comprehensive and contamination-free evaluation**.” It emphasizes “**Live updates to prevent contamination**” and “**Holistic Evaluation**,” covering not just code generation but also “**self-repair, code execution, and test output prediction**.” So the reliability issue here is about whether model outputs are genuinely trustworthy and measurable under clean, up-to-date, and broader evaluation settings.
+
+In short:
+
+- **Sketch paper:** reliable generation = making synthesis work better through automatic simplification.
+- **LIVECODEBENCH paper:** reliable generation = evaluating code models fairly and without contamination, using stronger benchmarks and multiple coding tasks.
+
+If you want, I can also turn this into a side-by-side table.
+------------------------------------------------------------------------
+[2026-09-23T23:13:02]  EVAL_Q4_DECOMPOSITION  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Compare how the sketching approach and the counterfeit-generation paper frame the problem of reliable code generation.
+RESPONSE: retrieved=['DBLP_conf_icml_GuJLSESS25', 'DBLP_journals_tog_WillisPLCDLSM21', 'DBLP_journals_corr_KoppelS17'] verdict=fail
+The documents only provide a sketching/CAD paper and a language-parametric transformation paper; they do **not** include a “counterfeit-generation paper,” so I can’t directly compare that paper’s framing.
+
+What I can say from the provided documents is that the sketching/CAD paper frames reliability as a data-and-environment problem: it emphasizes that “**the lack of a human designed dataset of ground-truth CAD programs**” has inhibited progress, and proposes “**the first dataset of human designed 3D CAD construction sequence information suitable for use with machine learning**” plus an execution environment, the “**Fusion 360 Gym**,” that provides feedback after each operation. It also says the task is to recover a CAD program from a target geometry, using “**a learning-based approach with neurally guided search**.”
+
+By contrast, the program-transformation paper frames reliability in terms of preserving source-code structure across languages. It argues that IR-based approaches can “**mutilate the program**” and that the goal is source-to-source transformation that can output “**readable code**” and “**preserve the structure of the original**.” It is concerned with transformations that remain correct and human-readable across languages, not with generating code from sketches.
+
+If you meant a different paper than “counterfeit-generation,” send its document and I can compare them directly.
+------------------------------------------------------------------------
+[2026-09-23T23:13:05]  EVAL_Q4_GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Compare how the sketching approach and the counterfeit-generation paper frame the problem of reliable code generation.
+RESPONSE: retrieved={'DBLP_journals_corr_0002S16': 'seed', 'DBLP_conf_cvpr_WillisJCT0GSTLS22': 'seed', 'DBLP_conf_cav_JeonQSF15': 'linked'} verdict=fail
+I only have one document about Sketch/Swapper and no document here about a “counterfeit-generation paper,” so I can’t make a direct comparison between the two.
+
+From the Sketch paper, the problem is framed as **automatically generating trustworthy simplifiers/rewrite rules from benchmark formulas**. It says:
+
+- “**we present a methodology for automatically generating a formula simplifier from a corpus of benchmark problems**”
+- “**the input to Swapper is a corpus of formulas from problems in a particular domain**”
+- the system “**generates a formula simplifier tailored to the common recurring patterns observed in this corpus**”
+
+So the Sketching approach frames reliable code generation as **domain-specific synthesis from examples plus autotuning**, with correctness handled through conditional rewrite rules and empirical performance selection.
+
+If you want, I can compare it once you provide the counterfeit-generation paper too.
+------------------------------------------------------------------------
+[2026-09-23T23:13:07]  EVAL_Q5_BASELINE  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Which paper in this corpus is best suited to answer a user question about code models misclassifying incorrect generations and failing to reason about execution behavior?
+RESPONSE: retrieved=['DBLP_conf_icml_GuJLSESS25', 'DBLP_conf_acl_GuLJOLSS24', 'DBLP_conf_pldi_SinghGS13'] verdict=pass
+The best-suited paper is **[DBLP_conf_acl_GuLJOLSS24] “The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?”**
+
+It directly studies code models’ failures on incorrect generations, stating that models have “a very shallow understanding of counterfeits” and that they are “worse at reasoning about the execution behaviour of counterfeits.” It also examines correctness checking, execution prediction, and repair of such samples.
+------------------------------------------------------------------------
+[2026-09-23T23:13:11]  EVAL_Q5_DECOMPOSITION  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Which paper in this corpus is best suited to answer a user question about code models misclassifying incorrect generations and failing to reason about execution behavior?
+RESPONSE: retrieved=['DBLP_journals_corr_abs-2402-19475', 'DBLP_conf_acl_GuLJOLSS24', 'DBLP_conf_icml_GuRLSS024'] verdict=pass
+The best-suited paper is **“The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?”**
+
+Why this one:
+- It explicitly studies **“counterfeit samples”**: incorrect programs that still pass weak checks.
+- The paper’s abstract says models have three failure modes, including:
+  - “**models mistakenly classify them as correct**”
+  - “**models are worse at reasoning about the execution behaviour of counterfeits**”
+  - and repair often underperforms resampling.
+- This directly matches the user question about **code models misclassifying incorrect generations and failing to reason about execution behavior**.
+
+The CRUXEval paper is related, but it focuses more generally on **code reasoning, understanding, and execution** rather than specifically on **incorrect generations being misclassified**.
+------------------------------------------------------------------------
+[2026-09-23T23:13:14]  EVAL_Q5_GRAPH  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   Which paper in this corpus is best suited to answer a user question about code models misclassifying incorrect generations and failing to reason about execution behavior?
+RESPONSE: retrieved={'DBLP_conf_icml_GuJLSESS25': 'seed', 'DBLP_conf_acl_GuLJOLSS24': 'seed', 'DBLP_conf_cav_SinghS12': 'linked'} verdict=pass
+The best suited paper is **[DBLP_conf_acl_GuLJOLSS24] _The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?_**
+
+It directly studies exactly that issue: it says models “**frequently classify [counterfeit samples] as correct**” and are “**worse at reasoning about the execution behaviour of counterfeits**,” and that they “**often predict their execution results as if they were correct**.”
+------------------------------------------------------------------------
+[2026-09-23T23:13:14]  EVAL_SUMMARY  SCENARIO=research_papers  MODEL=openai/gpt-5.4-mini
+PROMPT:   run_comparative_evaluation
+RESPONSE: 
+Before/after summary (paste into the worksheet's Evaluation Results table):
+  Baseline pass rate:      3/5
+  Decomposition pass rate: 2/5
+  Graph (k=3) pass rate:   3/5
+
+------------------------------------------------------------------------

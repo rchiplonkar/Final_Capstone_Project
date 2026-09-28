@@ -93,12 +93,14 @@ except Exception:  # pragma: no cover - optional dependency
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 LLM_MODEL = "openai/gpt-5.4-mini"  # Latest small OpenAI model, fast; covered by course credits
 TEMPERATURE = 0.2
-LOG_PATH = Path.cwd() / "Capstone_checkpoint_4_1_reponses_v2.log"
+LOG_PATH = Path(r"C:\Ranjan\Personal\MIT_Xpro\RAG_Context_Engineering\Lab_Excercises\.venv\Resubmission_09_23.log")
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # === SET THIS to the scenario you chose in Checkpoint 1.1 ===
 SCENARIO = "research_papers"   # "research_papers" or "wikipedia"
+ROOT_DIR = Path(__file__).resolve().parent
 CORPUS_DIR = (
-    Path(__file__).resolve().parent
+    ROOT_DIR
     / "Final_Capstone_Project"
     / "Final_Capstone_Project"
     / "Capstone_CheckPoint_1.1"
@@ -106,20 +108,11 @@ CORPUS_DIR = (
 )
 if not CORPUS_DIR.exists():
     alt_dirs = [
-        Path(__file__).resolve().parent.parent
-        / "Final_Capstone_Project"
-        / "Final_Capstone_Project"
-        / "Capstone_CheckPoint_1.1"
-        / "ResearchPapers",
-        Path(__file__).resolve().parent
-        / "Final_Capstone_Project"
-        / "Capstone_CheckPoint_1.1"
-        / "ResearchPapers",
-        Path(__file__).resolve().parent
-        / "Final_Capstone_Project"
-        / "Final_Capstone_Project"
-        / "Capstone_CheckPoint_1.1"
-        / "ResearchPapers",
+        ROOT_DIR / "Final_Capstone_Project" / "Final_Capstone_Project" / "Capstone_CheckPoint_1.1" / "ResearchPapers",
+        ROOT_DIR / "Final_Capstone_Project" / "Capstone_CheckPoint_1.1" / "ResearchPapers",
+        ROOT_DIR / "Final_Capstone_Project" / "Final_Capstone_Project" / "Capstone_CheckPoint_4.1" / "Final_Capstone_Project" / "Capstone_CheckPoint_1.1" / "ResearchPapers",
+        ROOT_DIR / "Final_Capstone_Project" / "Capstone_CheckPoint_1.1" / "ResearchPapers",
+        Path.cwd() / "Final_Capstone_Project" / "Final_Capstone_Project" / "Capstone_CheckPoint_1.1" / "ResearchPapers",
     ]
     for candidate in alt_dirs:
         if candidate.exists():
@@ -137,6 +130,15 @@ ANSWER_SYSTEM = (
     "You are a helpful assistant. Answer the question using only the provided "
     "documents, and quote from them where you can. If the documents do not contain "
     "the answer, say so rather than guessing."
+)
+
+JUDGE_SYSTEM = (
+    "You are a strict grader for a retrieval-augmented QA system. You will be given "
+    "a QUESTION, a GRADING NOTE describing what a correct answer must contain, and "
+    "an ANSWER produced by the system from retrieved documents. "
+    "Reply with exactly one word: PASS if the answer satisfies the grading note "
+    "(even if phrased differently), or FAIL if it does not, is evasive, or is "
+    "unsupported by the documents. Do not explain your reasoning."
 )
 
 
@@ -170,8 +172,13 @@ def log_response(label: str, prompt: str, response: str) -> None:
         f"RESPONSE: {response}\n"
         f"{'-' * 72}\n"
     )
-    with LOG_PATH.open("a", encoding="utf-8") as fh:
-        fh.write(entry)
+    try:
+        with LOG_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
+    except OSError:
+        fallback = Path.cwd() / "Resubmission_09_23.log"
+        with fallback.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
 
 
 # %% [markdown]
@@ -255,7 +262,7 @@ def load_real_corpus(directory: Path) -> list[dict[str, Any]]:
     if not directory.exists():
         return docs
 
-    pdfs = sorted(directory.glob("*.pdf"))
+    pdfs = sorted({pdf.resolve() for pdf in directory.rglob("*.pdf")})
     for pdf in pdfs:
         text = _read_pdf_text(pdf)
         compact = " ".join(text.split())
@@ -274,7 +281,7 @@ def load_real_corpus(directory: Path) -> list[dict[str, Any]]:
         docs.append(doc)
 
     if not docs:
-        for pdf in pdfs[:25]:
+        for pdf in pdfs[:10]:
             docs.append({
                 "id": pdf.stem,
                 "title": _normalize_title(pdf.stem),
@@ -297,10 +304,10 @@ def load_real_corpus(directory: Path) -> list[dict[str, Any]]:
                 if peer_id != current_id:
                     related.add(peer_id)
         if len(related) < 2:
-            for peer in docs[:10]:
+            for peer in docs[:20]:
                 if peer["id"] != current_id:
                     related.add(peer["id"])
-        doc["links"] = sorted(related)[:5]
+        doc["links"] = sorted(related)[:10]
 
     return docs
 
@@ -382,23 +389,43 @@ def build_graph(docs: list[dict]) -> nx.DiGraph:
     return G
 
 
-def graph_retrieve(graph: nx.DiGraph, query: str, k: int = 3) -> dict[str, str]:
-    """Return {doc_id: source_label}: baseline seeds plus their graph neighbors."""
-    union: dict[str, str] = {}
-    for doc_id, _ in baseline_retrieve(query, k):
-        union[doc_id] = "seed"
+def graph_retrieve(
+    graph: nx.DiGraph, query: str, k: int = 3, max_k: int | None = None
+) -> dict[str, str]:
+    """Return {doc_id: source_label} while allowing graph neighbors to compete within the
+    same retrieval cap as the baseline."""
+    max_k = max_k if max_k is not None else k
+    seed_limit = max(1, max_k - 1)
+    seed_docs = baseline_retrieve(query, k=seed_limit)
+
+    union: dict[str, tuple[str, float]] = {}
+    for doc_id, score in seed_docs:
+        union[doc_id] = ("seed", float(score))
+
     for seed in list(union):
         node = f"doc:{seed}"
         if not graph.has_node(node):
             continue
         for _, target, ed in graph.out_edges(node, data=True):
+            target_id = target.removeprefix("doc:")
             if ed.get("edge_type") == "links_to":
-                union.setdefault(target.removeprefix("doc:"), "linked")
+                if target_id not in union:
+                    union[target_id] = ("linked", 0.0)
             elif ed.get("edge_type") == "relates_to":
-                for sib, _, ed2 in graph.in_edges(target, data=True):  # Source docs on this topic
+                for sib, _, ed2 in graph.in_edges(target, data=True):
                     if ed2.get("edge_type") == "relates_to":
-                        union.setdefault(sib.removeprefix("doc:"), "topic")
-    return union
+                        sib_id = sib.removeprefix("doc:")
+                        if sib_id not in union:
+                            union[sib_id] = ("topic", 0.0)
+
+    priority = {"seed": 3, "linked": 2, "topic": 1}
+    ranked = sorted(
+        union.items(),
+        key=lambda item: (priority.get(item[1][0], 0), float(item[1][1]), item[0]),
+        reverse=True,
+    )
+    ranked = ranked[:max_k]
+    return {doc_id: source for doc_id, (source, _) in ranked}
 
 
 # %% [markdown]
@@ -410,30 +437,17 @@ def graph_retrieve(graph: nx.DiGraph, query: str, k: int = 3) -> dict[str, str]:
 
 # %%
 def my_advanced_plan() -> dict[str, Any]:
-    """Return YOUR advanced-retrieval plan for your chosen scenario.
-
-    TODO — your turn. Return a dictionary with these keys:
-      - "technique":   "decomposition", "graph", or "both"
-      - "node_types":  list[str]  — for graph: the kinds of nodes in your corpus
-                       (e.g., ["paper", "author", "topic"] or ["article", "category"])
-      - "edge_types":  list[str]  — the relationships you will surface
-                       (e.g., ["cites", "same_author", "shares_topic"])
-      - "test_queries": list[str] — 2-3 questions from your 3.1 evaluation set that
-                       single-pass retrieval handled poorly and that should improve.
-      - "rationale":   str — one or two sentences on why these choices fit your data.
-
-    Delete the raise NotImplementedError line once your code works.
-    """
+    """Return YOUR advanced-retrieval plan for your chosen scenario."""
     return {
         "technique": "both",
-        "node_types": ["paper", "topic", "conference"],
-        "edge_types": ["shares_topic", "same_conference", "related_paper"],
+        "node_types": ["paper", "topic"],
+        "edge_types": ["links_to", "relates_to"],
         "test_queries": [
             "Which papers in this corpus explain program synthesis and how sketching fills missing parts of a program?",
             "What research discusses whether code models can recognize their own incorrect generations and why reliability is still a problem?",
             "Compare papers that blend synthesis with verification, trust, and correctness to see how the field makes generated code more reliable.",
         ],
-        "rationale": "The Research Paper Navigator corpus contains long technical PDFs with strong topical overlap and conference-based clusters, so query decomposition helps break multi-aspect questions apart while graph expansion brings in adjacent papers that share concepts without matching the original wording exactly.",
+        "rationale": "The Research Paper Navigator corpus contains long technical PDFs with strong topical overlap, so query decomposition helps break multi-aspect questions apart while graph expansion (via shared topics and document links) brings in adjacent papers that share concepts without matching the original wording exactly.",
     }
 
 
@@ -453,6 +467,106 @@ def answer_from_docs(llm: ChatOpenAI, query: str, doc_ids: list[str]) -> str:
         HumanMessage(content=f"Documents:\n{context}\n\nQuestion: {query}"),
     ]
     return llm.invoke(messages).content
+
+
+EVAL_QUERIES = [
+    {
+        "id": "Q1",
+        "query": "What is the central idea of program synthesis and how does the sketching approach help generate correct programs from partial specifications?",
+    },
+    {
+        "id": "Q2",
+        "query": "In the paper 'The Counterfeit Conundrum: Can Code Language Models Grasp the Nuances of Their Incorrect Generations?' what do the authors conclude about whether code models can recognize their own incorrect generations?",
+    },
+    {
+        "id": "Q3",
+        "query": "How does the paper 'Program Synthesis from Polymorphic Refinement Types' justify using refinement types in synthesis?",
+    },
+    {
+        "id": "Q4",
+        "query": "Compare how the sketching approach and the counterfeit-generation paper frame the problem of reliable code generation.",
+    },
+    {
+        "id": "Q5",
+        "query": "Which paper in this corpus is best suited to answer a user question about code models misclassifying incorrect generations and failing to reason about execution behavior?",
+    },
+]
+
+GRADING_NOTES = {
+    "Q1": "Must explain program synthesis as automatically generating a program that meets a spec, and explain sketching as letting the programmer provide a partial program/template with holes that synthesis fills in.",
+    "Q2": "Must state the paper's actual conclusion: that code language models largely struggle to reliably recognize or explain their own incorrect generations (the paper finds this is a real limitation, not a solved capability).",
+    "Q3": "Must explain that the paper uses polymorphic refinement types to narrow the search space during synthesis by encoding precise input/output type constraints the synthesized program must satisfy.",
+    "Q4": "Must compare both papers: sketching frames reliability as satisfying a programmer-provided partial specification, while the counterfeit-generation paper frames reliability as a model's ability to judge its own incorrect output; the answer should name both framings, not just one.",
+    "Q5": "Must identify 'The Counterfeit Conundrum' paper (DBLP_conf_acl_GuLJOLSS24) as the best-suited source and explain why it directly studies models misclassifying their own incorrect generations.",
+}
+
+
+def judge_answer(llm: ChatOpenAI, query: str, grading_note: str, answer: str) -> str:
+    prompt = (
+        f"QUESTION: {query}\n\nGRADING NOTE: {grading_note}\n\nANSWER:\n{answer}"
+    )
+    messages = [SystemMessage(content=JUDGE_SYSTEM), HumanMessage(content=prompt)]
+    raw = llm.invoke(messages).content.strip().upper()
+    return "pass" if raw.startswith("PASS") else "fail"
+
+
+def run_comparative_evaluation(llm: ChatOpenAI, graph: nx.DiGraph) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    print("\n" + "=" * 72)
+    print("STEP 5b — Comparative evaluation on the Checkpoint 3.1 test set")
+    print("(comparable retrieval limit: k=3 documents for every system)")
+    print("=" * 72)
+
+    for item in EVAL_QUERIES:
+        qid, query = item["id"], item["query"]
+        note = GRADING_NOTES[qid]
+
+        base_ids = [i for i, _ in baseline_retrieve(query, k=3)]
+        base_answer = answer_from_docs(llm, query, base_ids)
+        base_verdict = judge_answer(llm, query, note, base_answer)
+        log_response(f"EVAL_{qid}_BASELINE", query, f"retrieved={base_ids} verdict={base_verdict}\n{base_answer}")
+
+        decomp_ids = multistep_retrieve(llm, query, k=3)
+        decomp_answer = answer_from_docs(llm, query, decomp_ids)
+        decomp_verdict = judge_answer(llm, query, note, decomp_answer)
+        log_response(f"EVAL_{qid}_DECOMPOSITION", query, f"retrieved={decomp_ids} verdict={decomp_verdict}\n{decomp_answer}")
+
+        graph_map = graph_retrieve(graph, query, k=3, max_k=3)
+        graph_ids = list(graph_map.keys())
+        graph_answer = answer_from_docs(llm, query, graph_ids)
+        graph_verdict = judge_answer(llm, query, note, graph_answer)
+        log_response(f"EVAL_{qid}_GRAPH", query, f"retrieved={graph_map} verdict={graph_verdict}\n{graph_answer}")
+
+        row = {
+            "id": qid,
+            "query": query,
+            "baseline_ids": base_ids,
+            "baseline_verdict": base_verdict,
+            "decomp_ids": decomp_ids,
+            "decomp_verdict": decomp_verdict,
+            "graph_ids": graph_ids,
+            "graph_verdict": graph_verdict,
+        }
+        rows.append(row)
+
+        print(f"\n{qid}: {query}")
+        print(f"  BASELINE      (k=3) retrieved={base_ids}      verdict={base_verdict}")
+        print(f"  DECOMPOSITION (k=3) retrieved={decomp_ids}    verdict={decomp_verdict}")
+        print(f"  GRAPH         (k=3) retrieved={graph_ids}     verdict={graph_verdict}")
+
+    def pass_rate(field: str) -> str:
+        n_pass = sum(1 for r in rows if r[field] == "pass")
+        return f"{n_pass}/{len(rows)}"
+
+    summary = (
+        "\nBefore/after summary (paste into the worksheet's Evaluation Results table):\n"
+        f"  Baseline pass rate:      {pass_rate('baseline_verdict')}\n"
+        f"  Decomposition pass rate: {pass_rate('decomp_verdict')}\n"
+        f"  Graph (k=3) pass rate:   {pass_rate('graph_verdict')}\n"
+    )
+    print(summary)
+    log_response("EVAL_SUMMARY", "run_comparative_evaluation", summary)
+    return rows
 
 
 def run_demo() -> None:
@@ -484,6 +598,7 @@ def run_demo() -> None:
 
     print("=" * 72)
     print("Done. The real Research Papers corpus is now active and the demonstration uses the full capstone corpus instead of the toy sample.")
+    run_comparative_evaluation(llm, graph)
 
 
 if __name__ == "__main__":
