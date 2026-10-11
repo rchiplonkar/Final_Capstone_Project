@@ -1,0 +1,399 @@
+CODE REVIEW AND TEST RUN 2 EVALUATION
+Research Papers Assistant (MIT xPro 8.1 capstone)
+Files reviewed:
+  Ranjan_Research_Assistant_Final_Capstone_Submission.py   (updated source, about 2,680 lines)
+  Test_Research_Assistant.py                               (updated harness, 570 lines)
+  research_assistant_test_case_v2_run2_results.xlsx        (158 cases, run 2 actual results)
+Reference documents: research_assistant_spec.md, research_assistant_architecture.md,
+  research_assistant_spec_design.md, research_assistant_test_strategy.md
+Graded workbook (columns F, J, K filled): research_assistant_test_case_v2_run2_graded.xlsx
+
+
+======================================================================
+1. HOW THIS REVIEW WAS DONE
+======================================================================
+
+Every one of the 158 rows was read against its Expected Result and Test Result Criteria.
+I did not have the model, so I could not re-run chat questions. Where the Actual Result
+was enough, I graded from it. Where I could check something myself against the real
+corpus text (the 153-paper text cache, 18,398,803 characters, which I loaded without the
+LLM) or the submitted code, I did, and column J of the workbook says so. The checks I ran
+myself were:
+
+  - corpus statistics (153 papers, 18,398,803 characters)                      TC-072
+  - BM25 retrieval for specific questions (retrieve_chunks, same k and per_doc
+    as the chat path)                                                          TC-007, TC-057, TC-073, TC-078
+  - quote verification on real and made-up quotes (_quote_support)             TC-027, TC-029, TC-095
+  - routing and intent (route, classify_intent)                                TC-047, TC-049, TC-155 (routing half)
+  - duplicate and mislabeled-document scans of the corpus                      TC-054, TC-058, year-data finding
+  - benchmark scorer with a wrong answer (_eval)                               TC-117
+  - make_llm with dummy settings (argument honoured, planner kept separate)    TC-106 (first half)
+  - assembled hardened prompt                                                  TC-154
+  - sanitizer on the benign question list, injection scan of all chunks        TC-118
+  - py_compile and import of the submitted file in an empty folder             TC-129
+  - dispatcher and header text read in the source                              TC-116, TC-125
+
+Result values used: Pass, Fail, Accepted limitation, Blocked, Not Run. A manual case with
+no evidence stays Not Run. A harness "PASS" was overridden where the evidence disagreed
+(TC-026). Where my own run decided a row that the harness skipped, the row says so.
+
+
+======================================================================
+2. RESULT SUMMARY
+======================================================================
+
+Pass 90, Fail 22, Accepted limitation 1, Blocked 1, Not Run 44 (of 158).
+Pass rate of the cases that were run: 79 percent (90 of 114).
+
+By category (Pass / Fail / other):
+  Individual-paper retrieval       16 / 2 / 0
+  Cross-paper comparison           10 / 2 / 0
+  Trend / change over time          7 / 5 / 1 accepted limitation
+  Grounding and citation            7 / 5 / 0
+  Security and adversarial         14 / 0 / 1 blocked, 2 not run
+  Performance and cost              9 / 1 / 1 not run
+  Data quality and corpus          7 / 3 / 0
+  Conversational usability         13 / 1 / 2 not run
+  Regression and acceptance         5 / 1 / 3 not run
+  Architecture and workflow         1 / 1 / 2 not run
+
+Failing rows: TC-007, 017, 020, 022, 025, 026, 027, 029, 050, 054, 057, 058, 068, 073,
+078, 085, 089, 092, 093, 094, 125, 156.
+
+Rubric view (Rubric Coverage sheet): 0 of 24 parameters are evidenced yet, 8 are at
+risk (P2, P4, P5, P6, P7, P8, P9a, G3) and 16 are not yet evidenced. Most of the 16 wait
+on the manual presentation, README and repository rows (TC-124 to TC-158) that cannot
+be run from here.
+
+Run-1 failures that were retested: 15. Now Pass: TC-003, 018, 028, 030, 052, 059, 062,
+069, and TC-009 and TC-042 (corrected in the run-1 workbook). Still failing: TC-007,
+017, 025, 027, 029, 050, 068.
+
+What improved since run 1: make_llm now honours its model argument (cost of the BEFORE
+pass fell from $0.78 to $0.145); the sanitizer no longer blocks the three benign trigger
+phrases (TC-042); the full-hardening security suite shows 0 of 8 probes followed through
+the chat path (TC-070); the reply to "/help", "/quit", EOF and empty input is clean; the
+cold benchmark pass uses 95 percent fewer tokens than the BEFORE pass and the warm pass
+uses 3.5 percent of the cold tokens (TC-107); the new unverified-attribution note works
+for a named venue and year (TC-051, TC-052, TC-054).
+
+
+======================================================================
+3. CONFORMANCE TO THE SPECIFICATION
+======================================================================
+
+Overall: the code implements every feature the spec lists in section 6, but three of
+the six are only partly met in behaviour, and one design instruction that the spec
+depends on (section 6.3, sorting sources chronologically before the model sees them) is
+not implemented in the answer path. Details:
+
+6.1 Conversational loop ........................ MET
+    chat-cli and the Tk chat window both run sanitize, cache, route, answer, citations and
+    history through ChatSession.ask. /exit, /quit, /sources, /help, EOF and empty input
+    behave (TC-043, 062 to 064, 066, 115). One gap: an unknown command-line argument
+    opens the chat window with no usage message (TC-125, finding F-14).
+
+6.2 Session memory for follow-ups .............. PARTLY MET
+    The last three turns are kept as a question plus a 200-character summary in a labelled
+    <conversation_history> block outside <documents> (confirmed by printing the prompt,
+    TC-154). Pronoun and topic follow-ups work (TC-059, 060, 102, 111). Two defects:
+    "the second one" is resolved to the wrong paper (TC-026) and a follow-up that refers to
+    a turn outside the window is answered about the wrong topic or refused (TC-048, TC-113). Findings F-03, F-06.
+
+6.3 Publication-year extraction and trend ...... PARTLY MET
+    Year resolution exists (151 of 153 resolved, 2 unknown, natosec_40 set from its arXiv
+    stamp). Two problems. (a) At least 14 files carry a filename year that the text
+    contradicts (finding F-09). (b) The spec asks that retrieved sources be sorted
+    chronologically BEFORE they are handed to the model, and design 4.5 says to reorder
+    `items` before _answer_messages. The code sorts only the doc-id list used for the
+    Sources footer (sorted_by_year is called after the answer is built), while the trend
+    prompt tells the model "the documents are given to you in chronological order". The
+    statement is not true, which is why the trend answers are not in year order (TC-020,
+    TC-022) (finding F-02).
+
+6.4 Reader-facing citations .................... PARTLY MET
+    display_label, sources_block and rewrite_inline_citations exist and most labels are
+    readable titles. Remaining defects: the same paper is listed twice in almost every
+    Sources line (F-04); some labels are still file-name or front-page text ("DBLP conf sat
+    2016", "DBLP journals fmsd FismanSS21", "Hana Chockler Georg Weissenbacher (Eds.)");
+    and the model now writes "[paper: title | year: y]" tags into the visible answer, which
+    rewrite_inline_citations does not convert (F-08).
+
+6.5 Structured comparison answers .............. MET
+    The compare addendum produces per-paper sections and an agreement/difference part
+    (TC-011 to 016, 049, 060, 083). A comparison of something with itself is handled
+    (TC-018).
+
+6.6 Direct-quotation support made visible ...... PARTLY MET
+    The "Quotation support: n/m" line is printed under every answer. The check itself
+    has three faults: false negatives on real quotes (words split by the PDF extraction),
+    quoted paper titles counted as quotes, and no check that a quote comes from the paper
+    the answer names (F-01). A fabricated quote is correctly rejected (TC-095).
+
+7. What does not change ........................ MET
+    The security layer, router, cache and BM25 retrieval were kept. Injection handling holds
+    (TC-035 to 040, 096 to 102, 070). Cache and guard word hold (TC-044 to 046, 105).
+
+10. Known limitations .......................... CONFIRMED
+    All five documented limitations showed up in this run: filename-based years (F-09),
+    no persistence, token-overlap cache, regex router, no page numbers. Run 2 adds new
+    ones that the spec does not list: duplicate documents, proceedings volumes crowding
+    retrieval, no aggregation over the collection (counts, year ranges), short
+    identifiers dropped by the tokenizer, and the quote-check false negatives.
+
+
+======================================================================
+4. CONFORMANCE TO THE LOW-LEVEL DESIGN
+======================================================================
+
+Sec 3  module-level state ...................... MET (YEAR_BY_DOC, YEAR_OVERRIDES, history constants)
+Sec 4.2 _extract_year cascade .................. MET in form; wrong results for 14 files (F-09)
+Sec 4.4 sorted_by_year ......................... helper MET
+Sec 4.5 use in the agent path .................. NOT MET (F-02): items are not reordered before the prompt
+Sec 5.1 display_label .......................... MET (title plus year, no year placeholder: TC-034, TC-108)
+Sec 5.2 sources_block .......................... PARTLY: dedupes by document id only (F-04)
+Sec 5.3 rewrite_inline_citations ............... PARTLY: handles [doc#n] only (F-08)
+Sec 6   intent detection and addenda ........... MET (conv-check intent tests pass); relevance of
+                                                  trend answers is not controlled (F-05)
+Sec 7.2 history budget ......................... MET (HISTORY_MAX_TURNS 3, HISTORY_SUMMARY_CHARS 200).
+                                                  The 200-character summary is too short to carry the
+                                                  order of a numbered answer (F-03)
+Sec 7.4 trust boundary for history ............. MET (separate labelled block, TC-154)
+Sec 7.5 ChatSession ............................ MET
+Sec 7.6 chat() loop ............................ MET (clean EOF, model-error try/except, zero-corpus message)
+Sec 8   conversational regression checks ....... MET: 32 sub-checks pass (TC-069). The year sanity check only
+                                                  knows 4 mislabeled files, so it cannot see F-09
+Sec 9   entry point ............................ PARTLY: modes exist; no usage message (F-14)
+Sec 10  error handling ......................... MET for the rows I could see (empty corpus, model error,
+                                                  Ctrl-C and EOF, undated documents); GUI cases TC-120 to
+                                                  TC-123 not run
+Sec 11  repository layout and README outline ... NOT CHECKED: no repository, README, .env.example or
+                                                  requirements file was supplied. The code reads
+                                                  requirements_8_1_v1.txt, and now six environment variables
+                                                  (three answer-model, three optional planner-model).
+                                                  The design text, the README outline and TC-132 still say
+                                                  three; they need to be updated.
+
+Architecture deviation (decision 8.2/9): the architecture document calls for a cheap
+planner and a stronger answer model. The submission does the reverse on purpose and
+documents it in the code comments ("cheaper answer model", "costlier PLANNER model", the
+configuration dialog). The prices printed by the benchmark confirm it: the planner
+openai/gpt-5.4-nano costs 0.20 / 1.25 USD per million tokens (in/out), the answer model
+openai/gpt-4o-mini 0.15 / 0.60. Either update the architecture and spec text, or switch
+the roles back. The module header (line 11) still says "a small planner model plus a
+larger answer model", which contradicts the rest of the file (F-15).
+
+
+======================================================================
+5. FINDINGS (ordered by impact on a reviewer or a demo)
+======================================================================
+
+Severity: Blocking = wrong or invented content shown as fact, or a spec feature that does
+not work; Major = visibly poor behaviour with a clear cause; Minor = cosmetic or document
+drift.
+
+F-01  Quote verification gives false results  [Blocking]  TC-027, 029, 037, 077, 092
+      _quote_support normalises the quote and looks for it in the normalised corpus. The PDF
+      text has line-break splits ("imple mentation", "iden tify"), so genuine quotes are
+      reported as unverified (0/1 for a verbatim sketching sentence). Titles inside quotation
+      marks count as quotes. And nothing checks that a verified quote comes from the paper the
+      answer names: in TC-029 the "definition" attributed to the 2015 CAV paper is in the 2017
+      FMSD paper, not in the 2015 one.
+      Fix: compare with spaces removed on both sides; repair splits in the loader; skip spans that
+      equal a known title; after verifying, list the documents that contain the quote and compare
+      with the documents the answer names.
+
+F-02  Trend answers are not in year order  [Blocking]  TC-020, 022
+      See section 3, 6.3. Fix: for intent == "trend" sort the retrieved items by YEAR_BY_DOC before
+      _format_docs_xml, and state "strictly ascending by year, one bullet per period" in the addendum.
+
+F-03  Follow-ups that point into the previous answer are resolved by guesswork  [Blocking]  TC-026, 068
+      History keeps 200 characters of the previous answer, so "the second one" and "the first one"
+      cannot be resolved. In TC-068 "the first one" returned the wrong paper and year.
+      Fix: store the ordered list of papers the previous answer presented and resolve ordinals
+      against it (details in TC-026 column K).
+
+F-04  Duplicate documents are indexed and listed twice  [Blocking for the demo]  TC-054, 058, 068, 093, 094
+      The corpus has 15 groups of exact duplicates (30 files) and about 25 groups whose first 150
+      characters match. Each copy is its own paper: Sources lists the same title twice in most
+      answers and a duplicate pair can use two of the six retrieval slots.
+      Fix: content hash at load time, canonical document plus aliases; dedupe sources_block by
+      canonical id and normalised title.
+
+F-05  Trend and "what changed" answers invent a story  [Blocking]  TC-022, 085, 089, 017
+      The model builds a timeline from loosely related papers (a CAD dataset and a CAV front page
+      become "sketch recognition research"), invents a "2013 journal paper" and quotes it, and
+      describes a "2008 PLDI paper" that was never retrieved. The attribution note is appended
+      after the invented text, and its regex only knows a short venue list (it has no "journal"),
+      so it missed "2013 journal paper".
+      Fix: relevance gate for trend retrieval, tell the model the year/venue claims that were not
+      matched BEFORE generation, say plainly when coverage is thin (columns K of TC-022, 017, 085, 089).
+
+F-06  Contextual retrieval pollutes the query  [Major]  TC-048, 113
+      The follow-up retrieval query is the previous question plus its answer summary plus source
+      titles. A new, explicit question ("remind me what CRUXEval measures") is then dominated by the
+      previous topic (CEGIS oracle) and the answer is a refusal; when the referenced turn is outside
+      the window the model answers about the most recent topic without saying that older turns are
+      no longer kept.
+      Fix: add context terms only when the new question has no topic term of its own; say "I only
+      keep the last 3 turns" when an ordinal or "first question" cannot be resolved.
+
+F-07  Proceedings volumes crowd out the right papers  [Major]  TC-057, 073, 007
+      DBLP_conf_cav_BraggFRS21 (2.5 million characters, a CAV 2021 volume) appears in 29 of the
+      129 Sources lines in this run, and proceedings volumes together in 42. For the BENCH CEGIS/SAT
+      question it takes 3 of the 6 retrieved chunks, so neither expected sketching paper is
+      retrieved (source hit 0.50 in run 1, 0.00 in run 2). Do not just delete the volumes: the
+      decisive "oracle" passage for TC-007 comes from one.
+      Fix: one chunk per question for volumes, rank below single-paper chunks, label them as
+      "CAV 2021 proceedings volume".
+
+F-08  The model writes titles and "[paper: ... | year: ...]" tags itself  [Major]  TC-156, many Pass rows
+      The new passage prefix and the grounding addendum ("use that year and title as the paper's
+      identity") make the model copy the tag into the visible answer. This breaks design decision
+      5 (citations resolved after the answer, by program) and shows raw markup in a demo.
+      Fix: put title and year in attributes of the passage tag, tell the model to cite by id only,
+      and extend rewrite_inline_citations to convert or remove any "[paper: ...]" text.
+
+F-09  Filename years and titles are wrong for 14 more files  [Major]  TC-020, 024, 025, 088, 091, 097
+      The first page of these files is a 2025 or 2026 paper unrelated to the DBLP name: MANTRA
+      (icse_JeonQFFS16, shown as 2016), Raven (pldi_SinghGS13, 2013), RVISmith (cacm_WangZKS16 2016
+      and tocs_WangZKS15 2015, one paper), the knowledge-graph paper (fmcad_AlurBJMRSSSTU13 2013 and
+      natosec_AlurBDF0JKMMRSSSSTU15 2015, one paper), Stencil-Lifting (pldi_KamilCIS16, 2016),
+      Bench-Push (icra_CamposISK19, 2019), pldi_ChaudhuriS10 (2010), oopsla_YessenovXS11 (2011),
+      popl_YangYS12 (2012), cacm_AlurSFS18 (2018), ftpl_ChaudhuriEPSSY21 (2021), ftpl_CheungS16 (2016).
+      The date test: the arXiv identifier or a "to appear at ... YEAR" line on the first page is two
+      or more years later than the filename year. It nominates 15 files, not 14: it also flags
+      journals_corr_abs-2302-01976 (Sparling, 2023), a correct paper whose later revision says
+      "to appear at ICLR 2026". The 14 listed above were each confirmed by reading the first page, so
+      a date test alone is not enough; compare the first-page title as well. The test strategy lists
+      3 mislabeled files and conv-check 4, so the corpus facts, the year oracle and the sanitised
+      answers are all built on wrong years.
+      Fix: nominate candidates with the date test, confirm by title, log the files as
+      filename/content mismatches, and recompute the Corpus Facts sheet (done in
+      research_assistant_test_case_v3.xlsx: 59 documents after 2020, 11 in 2016, 15 in 2025 by content).
+
+F-10  Short identifiers are dropped by the tokenizer  [Major]  TC-078
+      _tokens keeps [a-z0-9]+ and drops tokens of two characters or fewer, so "sk_p" becomes
+      "sk" and "p" and is discarded; the question is reduced to "system". Fix in TC-078 column K.
+
+F-11  The answer prompt makes the model refuse when the user's word differs  [Major]  TC-007
+      Retrieval is now correct (the oracle passage ranks first). The rule "a passage that merely
+      contains a word is not evidence" is read by the model as "the user's exact word must appear in
+      a sentence about the topic". Fix in TC-007 column K.
+
+F-12  Collection-wide questions get a wrong answer  [Major]  TC-025, 068 (turn 7), 091, 087, 088
+      "Which papers are before 2010", "how many in 2016" cannot be answered by top-k passages. The
+      assistant states "no papers before 2010" (false) or "one paper in 2016". Fix: a deterministic
+      catalog route over YEAR_BY_DOC and the titles (TC-025 column K).
+
+F-13  False "retrieved passage contained instructions" note  [Minor]  TC-046, 113
+      The model is told to add that note when a document contains instructions. The corpus scan finds
+      0 of 24,343 chunks matching the injection pattern, so the note is always a false alarm. The
+      blocked-input wording ("after unsafe content was removed") is also wrong for harmless input such
+      as "/foo" or the word "synthesis" (TC-067, 082).
+
+F-14  Unknown command-line argument opens the chat window  [Minor]  TC-125
+      Fix in TC-125 column K.
+
+F-15  Stale text in the submission  [Minor]
+      Header line 11 (small planner, larger answer model) contradicts the file; the block
+      "TODO - remaining work for the 8.1 submission" is still in the file although its items are
+      implemented; the benchmark constants BASELINE_EXPECTED_CALLS (16 to 22) and BASELINE_MAX_TOKENS
+      (600,000) no longer describe the 153-paper BEFORE pass (954,013 tokens, 32 calls; run 1 had
+      1,022,400 and 31), so the drift flag prints in every run.
+
+F-16  Benchmark subprocess crashed once (exit code 3221225477)  [Major, cause unknown]  TC-050
+      A Windows access violation in native code, no output captured, and the same command succeeded
+      later in the same session (TC-073). See TC-050 column K for how to get the trace.
+
+F-17  Refusals list unrelated sources  [Minor]
+      Under "the documents do not cover this" the Sources line shows 4 to 13 unrelated papers (TC-009,
+      053, 076, 097, 098, 110), which reads as support for the refusal. Show Sources only when the
+      answer uses at least one passage, or label them "retrieved, not used".
+
+Positive controls worth keeping for the recording: TC-009, 076, 084 (honest "not in the
+collection"), TC-051 to 053 (mislabeled files not turned into synthesis claims), TC-034 and
+TC-109 (mislabeled files answered from their real content), TC-036 to 040 and TC-070
+(injection), TC-044 to 046 (cache and guard word), TC-056 and TC-072 (corpus integrity).
+
+
+======================================================================
+6. REVIEW OF THE TEST HARNESS (Test_Research_Assistant.py)
+======================================================================
+
+Improvements since run 1: the workbook headers are asserted, secrets are redacted, each
+case runs in its own fresh chat window, manual rows are skipped with a clear message, TC-056
+and TC-072 have scenarios, and heavy rows are marked.
+
+H-01  CHECKS test the whole transcript, including the user's own turns. TC-031, 046, 049, 060
+      and 061 search for words (livecodebench, cruxeval, "before 2010", "euler") that appear in
+      the questions that the transcript echoes, so they pass whatever the assistant answers.
+      TC-061 should assert that "euler" is ABSENT from turn 2.
+H-02  TC-026 check (a 2005 to 2009 year and a 2023 to 2025 year anywhere in the transcript) is
+      satisfied by turn 1 alone. It returned PASS while turn 2 answered about the wrong paper.
+      Restrict the check to the last assistant reply, and for TC-026 assert the title of the
+      second item of turn 1.
+H-03  TC-044 and TC-045 accept a second call up to 1.25 times slower than the first. Use
+      "second call under 1 second or under 20 percent of the first".
+H-04  run_subprocess does not use unbuffered output or faulthandler, does not write the child's
+      output to a file, and does not treat a non-zero exit code as a failure. TC-050 produced only
+      "[exit code 3221225477]".
+H-05  The chat window does not print token counts, so TC-044, 045, 047, 104, 105 and 113 can only
+      be judged by latency. Have ChatSession.ask return usage and print it in the transcript.
+H-06  The harness writes "PASS"/"FAIL" in capitals to column F; the workbook list uses "Pass" and
+      "Fail". COUNTIF ignores case, but the cell values should match the list.
+H-07  No automatic check for the structural criteria that the workbook relies on: duplicate titles
+      in a Sources line (TC-093, 094, 068), raw "[paper:" or "DBLP" text in the answer, and "Quotation
+      support" n equal to m. A single function that parses the transcript for these would grade
+      about 25 rows without a person.
+H-08  Manual rows that can be scripted without the LLM: TC-095, 116, 117, 118, 129, 154 (all
+      were run offline in this review). Add them to PLANS as "scenario" cases so they stop
+      showing as Not Run.
+
+Status: H-01 to H-08 are implemented in the run-3 Test_Research_Assistant.py, with a self-test
+(Test_Research_Assistant_selftest.py, 30 cases). Re-grading the run-2 results with the new checks
+gives the same Pass or Fail as the graded workbook on all 42 rows where it grades Pass or Fail
+(no contradiction). On the other rows it leaves F empty and prints a lint note, or marks Not Run.
+
+
+======================================================================
+7. CHANGES NEEDED IN THE TEST WORKBOOK ITSELF
+======================================================================
+
+- TC-090 and TC-108 expect "no year" for natosec_40. The submission now sets 2026 from the
+  arXiv stamp ("5 May 2026"), which is correct. Change both to "title shown, year 2026". TC-024
+  has the same assumption in its expected result.
+- Corpus Facts and every expected result that depends on a year count (TC-025, 087, 088, 091):
+  recompute after F-09 is fixed. The oracle counted 45 documents after 2020 and 15 in 2016 with
+  the wrong filename years.
+- TC-132 says the code reads three variables; it reads six (three optional planner variables).
+  TC-126 and TC-131 say requirements.txt; the code reads requirements_8_1_v1.txt.
+- TC-050: replace the 338K to 402K token baseline with the measured value for the current corpus
+  (about 950K to 1.02M for the BEFORE pass), or the criterion cannot pass.
+- TC-057 and TC-058 name file keys (BraggFRS21, PuNSB16) that BM25 over passage text cannot match.
+  Ask the question by topic ("the CAV 2021 volume on program verification") and check the Sources
+  line instead.
+- TC-081: the paraphrase was answered, so the "lexical ceiling" example for the limitations slide
+  has to come from TC-078 (identifier lost by the tokenizer) and TC-007.
+- Accepted limitation: only TC-091 qualifies as written. TC-025 has no such clause, so it stays Fail.
+
+Status: the corrections listed above, and the TC-055 text-yield note, are applied in research_assistant_test_case_v3.xlsx
+(column N carries a "v3:" note on each changed row and the Change Log lists them).
+
+
+======================================================================
+8. SUGGESTED ORDER OF FIXES
+======================================================================
+
+1. F-01 quote check            (about 10 lines, removes three failing rows and one wrong grounding signal)
+2. F-04 duplicates             (load-time hash, sources_block dedupe; fixes TC-054, 058, 093, 094, 068)
+3. F-02 trend sort + F-05 relevance gate (TC-020, 022, 089; also 085 and 017 with the attribution change)
+4. F-03 ordered-items memory   (TC-026, 068)
+5. F-07 volumes and F-10 tokenizer (TC-057, 073, 078)
+6. F-11 prompt wording         (TC-007)
+7. F-09 year rule + recompute Corpus Facts
+8. F-12 catalog route          (TC-025, 091)
+9. F-08 tag handling, F-14 usage message, F-15 stale text, then re-run and update the workbook.
+
+After items 1 to 5 the 22 failing rows should drop to about 6 (TC-007 and TC-025 depend on 6
+and 8; TC-050 on the crash).

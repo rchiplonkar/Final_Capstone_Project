@@ -1,0 +1,40 @@
+# Dependencies for the Research Papers Assistant (8.1 capstone submission).
+# Tested in a fresh Python 3.12 virtual environment.
+#
+# This is the actual import list of Research_Assistant_Final_Capstone_Submission.py, not
+# the full Module 1-4 lab stack in requirements_7_2.txt. No vector store, no RAGAS, no
+# LangGraph, no knowledge-graph library: this script retrieves with a hand-rolled BM25
+# chunk index (plain Python, no numpy) and never builds an embedding index or an agent
+# graph. Install with:
+#     python -m venv .venv
+#     #  Windows:  .venv\Scripts\activate     macOS/Linux:  source .venv/bin/activate
+#     python -m pip install --upgrade pip
+#     pip install -r requirements_8_1_v1.txt
+#
+# Research_Assistant_Final_Capstone_Submission.py also installs from this file
+# automatically on import if any of these packages are missing (see
+# _ensure_dependencies near the top of that script), so this manual install is a
+# convenience, not a strict prerequisite.
+
+python-dotenv==1.2.2
+
+# LangChain pieces this script actually imports: langchain_core.messages
+# (HumanMessage/SystemMessage) and langchain_openai.ChatOpenAI, pointed at OpenRouter
+# through its base_url. No langchain-chroma, no langchain-community, no
+# langchain-text-splitters -- there is no vector store and chunking is done by hand in
+# build_chunk_index().
+langchain-core==1.3.2
+langchain-openai==1.1.10
+
+# PDF text extraction for the research-paper corpus (_read_pdf_text / load_real_corpus).
+# PyMuPDF is tried first; pypdf is the fallback if PyMuPDF is missing or fails to open a
+# given file. At least one of the two has to be installed, or every PDF in the corpus
+# comes back unreadable.
+pymupdf==1.28.2
+pypdf==6.19.0
+
+# Transitive dependencies pinned for reproducibility: langchain-openai calls the
+# OpenRouter API through the openai SDK, and langchain-core requires pydantic 2.x.
+# Pinning both avoids the same package-drift failures requirements_7_2.txt pins against.
+openai==2.26.0
+pydantic==2.12.5
