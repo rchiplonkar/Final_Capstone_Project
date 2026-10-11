@@ -1,0 +1,359 @@
+CODE REVIEW AND TEST RUN 3 EVALUATION
+Research Papers Assistant (MIT xPro 8.1 capstone)
+Files reviewed:
+  Ranjan_Research_Assistant_Final_Capstone_Submission.py   (updated source, run 3)
+  Test_Research_Assistant.py and the extra log files        (updated harness and run logs)
+  research_assistant_test_case_v3_run3_results_v1.xlsx      (127 cases, run 3 actual results)
+Reference documents: research_assistant_spec.md, research_assistant_architecture.md,
+  research_assistant_spec_design.md, research_assistant_test_strategy.md, code_review_run2.log
+Graded workbook (columns F, J, K filled): research_assistant_test_case_v3_run3_graded.xlsx
+
+
+======================================================================
+1. HOW THIS REVIEW WAS DONE
+======================================================================
+
+I read the full difference between the run-2 file and the run-3 file, then read the new
+functions in place. Every one of the 127 rows was read against its Expected Result and Test
+Result Criteria. I could not call the model from this workspace (the connection to the model
+provider is refused), so I did not re-run chat questions. Where the Actual Result was enough I
+graded from it. Where I could check something myself against the real corpus text (the
+text cache, now 18,355,857 characters after extraction repair) or the submitted code, I did,
+and column J says so. Checks I ran myself, without the model:
+
+  - cache similarity of the TC-045 paraphrase pair under the new tokenizer       TC-045
+  - _quoted_spans on the TC-030 answer text, ellipsis splitting, attribution note  TC-030, 014, 108
+  - answer_items, _has_own_topic and _contextual_retrieval_query on the follow-up
+    questions                                                                       TC-026, 059, 069, 111
+  - retrieve_chunks for the sanitized TC-035 and TC-096 prompts                      TC-035, 096
+  - catalog_answer on topic-plus-year questions                                      TC-046
+  - corpus counts by content year, distinct works, duplicate groups                  TC-025, 088, 091
+  - extraction repair effect on the character total                                  TC-072
+  - usage message and exit codes for an unknown mode                                 TC-125
+  - the fix checks inside the submission (_review_fix_checks), about 50 lines         TC-069
+
+Result values used: Pass, Fail, Blocked, Not Run. A harness result was overridden where my
+evidence disagreed: TC-035 and TC-054 (harness Pass, graded Fail), TC-072 and TC-119
+(harness Fail, graded Pass because the workbook expectation is out of date). TC-107 and
+TC-125 were not decided by the harness; I checked them and graded Pass. No credentials were
+used or stored in any file.
+
+
+======================================================================
+2. RESULT SUMMARY
+======================================================================
+
+Pass 98, Fail 18, Blocked 1, Not Run 10 (of 127).
+Pass rate of the cases that were run: 84 percent (98 of 117).
+
+By category (Pass / Fail / other):
+  Individual-paper retrieval          17 / 1 / 0
+  Cross-paper comparison               9 / 3 / 0
+  Trend / change over time             9 / 4 / 0
+  Grounding and citation              11 / 1 / 0
+  Security and adversarial            14 / 2 / 1 blocked
+  Performance and cost                10 / 1 / 0
+  Data quality and corpus integrity    8 / 2 / 0
+  Conversational usability            11 / 3 / 2 not run
+  Regression and acceptance            6 / 1 / 2 not run
+  Architecture and workflow            1 / 0 / 0
+  Operational and configuration        2 / 0 / 6 not run
+
+Failing rows: TC-008, 015, 019, 022, 026, 030, 035, 045, 054, 057, 059, 068, 069, 084,
+085, 089, 096, 111.
+Not Run: TC-065, 071, 074, 114, 120, 121, 122, 123, 124, 126 (all manual or waiting on
+the other rows). Blocked: TC-099 (keylogger prompt, not to be executed).
+
+Rubric view (Summary sheet): 6 of 24 parameters are evidenced, 6 are at risk. The
+remaining parameters wait on the manual presentation, README and repository rows.
+
+Comparison with run 2 (the run-2 workbook had 158 rows; this one has 127, so only rows
+that exist in both are compared):
+  Failing in run 2 and now Pass: TC-007, 017, 020, 025, 027, 029, 050, 058, 073, 078, 092,
+    093, 094, 125.
+  Failing in run 2 and still failing: TC-022, 026, 054 (behaviour; the Sources part now
+    passes), 057, 068, 085, 089.
+  Passed in run 2 and now failing (regressions): TC-045, 059, 096, 111, and TC-069 in the
+    conversation check. Causes: N-01 (cache), N-02 (follow-up logic), N-06 (retrieval junk).
+
+Net: 14 of the 22 run-2 failures are fixed, 4 rows regressed. Three of the four regressions
+come from changes made in this round (the tokenizer and the follow-up rule).
+
+
+======================================================================
+3. CONFORMANCE TO THE SPECIFICATION
+======================================================================
+
+Overall: all six features in spec section 6 are implemented. Four are met in behaviour; 6.2
+(follow-ups) is worse than in run 2 because of a new rule, and 6.6 (quotation support) still
+has faults in the counting.
+
+6.1 Conversational loop ........................ MET
+    Unknown command-line mode now prints a usage message and exits with code 2 (TC-125,
+    checked by me). /exit, /quit, /sources, /help, EOF and empty input are clean. Ctrl-C
+    on the terminal was not pressed by hand (TC-065 Not Run).
+
+6.2 Session memory for follow-ups .............. PARTLY MET (regressed)
+    Ordered items are now stored and "the first one" style questions can be resolved
+    (F-03 work), but two new defects break the common cases: "What year was that paper
+    published?" and "And who wrote that one?" are refused (TC-059, 069, 111), and "the second
+    one" after a year-led timeline picks a paper that was not in the answer (TC-026). See N-02.
+
+6.3 Publication-year extraction and trend ...... MET for year and order, PARTLY for relevance
+    Years now come from the content when the filename year is contradicted by the first page
+    (14 files). Trend items are sorted by year before the model sees them (_prepare_items,
+    design 4.5 now met). Trend answers are in order (TC-020 Pass). The relevance gate is too
+    weak: loosely related passages still produce an invented story (TC-089, TC-019).
+
+6.4 Reader-facing citations .................... MET with small gaps
+    The same paper is no longer listed twice, "[paper: ... | year: ...]" tags are rewritten,
+    and Sources is dropped or labelled "retrieved, not used" on refusals. Remaining: nine
+    volume files still get file-name labels, one title is a garbled author line, one answer
+    shows a raw DBLP id in prose, and the Sources dedupe can drop the label that the text
+    cited (TC-021, 068). See N-12, N-13, N-15.
+
+6.5 Structured comparison answers .............. PARTLY MET
+    Comparisons with both sides present work. A comparison where one side is missing from
+    the retrieved passages is refused as a whole (TC-015, 084, 085). See N-03.
+
+6.6 Direct-quotation support made visible ...... PARTLY MET
+    Line breaks in the extracted text no longer cause false negatives, titles are skipped,
+    and the check now lists which papers contain the quote. The span finder still pairs the
+    quote characters wrongly after a short quoted word, and ellipses split a real quote into
+    two parts that are scored as separate failures (TC-030, TC-014, TC-108). See N-04.
+
+7. What does not change ........................ MET
+    Injection handling holds (TC-036 to 040, 070, 097 to 102). The fuzzy cache works for
+    exact repeats but no longer for the TC-045 paraphrase (N-01).
+
+10. Known limitations .......................... CONFIRMED
+    Filename-based years are now partly replaced by content years. New limitation seen in
+    this run: the lexical retriever cannot tell that a conference copy and a preprint copy of
+    one work are the same work unless told (N-07).
+
+
+======================================================================
+4. CONFORMANCE TO THE LOW-LEVEL DESIGN
+======================================================================
+
+Sec 3   module-level state ..................... MET (YEAR_BY_DOC, FILENAME_CONTENT_MISMATCH,
+                                                 DUPLICATE_OF, DOC_ALIASES, VOLUME_IDS)
+Sec 4.2 _extract_year cascade .................. MET; _content_year overrides 14 filename years
+Sec 4.4 sorted_by_year ......................... MET
+Sec 4.5 use in the agent path .................. MET (_prepare_items sorts before the prompt)
+Sec 5.1 display_label .......................... PARTLY: nine volume files still show file-name labels (N-12)
+Sec 5.2 sources_block .......................... MET for duplicates; title-key dedupe can drop the cited
+                                                 label (N-13)
+Sec 5.3 rewrite_inline_citations ............... MOSTLY MET: [paper: ...] tags handled; one bare DBLP id
+                                                 left in prose (N-15)
+Sec 6   intent detection and addenda ........... PARTLY: trend relevance gate (N-08), catalog route takes
+                                                 topic-plus-year questions (N-09)
+Sec 7.2 history budget ......................... MET (6 stored items per turn)
+Sec 7.4 trust boundary for history ............. MET
+Sec 7.5 ChatSession ............................ MET
+Sec 7.6 chat() loop ............................ MET
+Sec 8   conversational regression checks ....... NOT MET: exit code 1, two sub-checks fail because of N-02.
+                                                 About 50 of the fix checks pass.
+Sec 9   entry point ............................ MET (usage message, exit 2)
+Sec 10  error handling ......................... MET for the rows I could see; GUI rows TC-114, 120 to 122
+                                                 not run
+Sec 11  repository layout and README outline ... NOT CHECKED: no README or requirements file supplied
+
+Decision 8.2/9 (planner and answer model roles): the roles are the reverse of the
+architecture text on purpose (planner gpt-5.4-nano, answer gpt-4o-mini). The header and the
+TODO text are now updated, so the contradiction in the code is gone. The architecture and
+spec documents still need the matching sentence.
+
+
+======================================================================
+5. FINDINGS
+======================================================================
+
+Severity: Blocking = wrong or invented content shown as fact, or a spec feature that does
+not work; Major = visibly poor behaviour with a clear cause; Minor = cosmetic or document
+drift.
+
+5A. STATUS OF THE RUN-2 FINDINGS
+
+F-01 Quote verification ................ PARTLY FIXED. Split words, titles and attribution are handled.
+                                         Span pairing and ellipsis splitting still wrong (N-04).
+F-02 Trend answers not in year order ... FIXED (TC-020 Pass; sorted in _prepare_items).
+F-03 Ordinal follow-ups ................ NOT EFFECTIVE. Items are stored, but the year-bullet case and the
+                                         new _has_own_topic rule break it (N-02; TC-026, 068).
+F-04 Duplicates listed twice ........... PARTLY FIXED. 153 files collapse to 138 works, Sources no longer
+                                         repeats a title. The model is not told about aliases (N-07).
+F-05 Trend answers invent a story ...... NOT EFFECTIVE. Gate keeps passages that share one topic word
+                                         (N-08; TC-089, 019, 022).
+F-06 Contextual retrieval pollution .... PARTLY FIXED. Context is added only when the question has no
+                                         topic of its own, but the test for "own topic" is too loose
+                                         (N-02).
+F-07 Proceedings volumes crowd out ..... PARTLY FIXED. Volumes are capped, which helps TC-073 and
+                                         TC-007, but a question that names a volume now retrieves
+                                         nothing (N-10; TC-057).
+F-08 Raw [paper: ...] tags in text ..... PARTLY FIXED. Tags are rewritten; a bare DBLP id still leaks (N-15).
+F-09 Filename years wrong .............. FIXED. 14 mismatches use the content year. The Corpus Facts year
+                                         counts in the workbook still use filename years.
+F-10 Tokenizer drops short ids ......... FIXED for retrieval (TC-078 Pass), but the same tokenizer change
+                                         lowered the cache similarity (N-01).
+F-11 Refusal when the word differs ..... FIXED (TC-007 Pass).
+F-12 Collection-wide questions ......... FIXED for pure catalog questions (TC-025, 088, 091 Pass). The route
+                                         catches topic-plus-year questions too (N-09).
+F-13 False "contained instructions" .... FIXED.
+F-14 Unknown argument opens window ..... FIXED (usage message, exit 2).
+F-15 Stale text and constants .......... PARTLY FIXED. Header and TODO text are updated, but
+                                         BASELINE_MAX_TOKENS (1,100,000) is below the 1.17M tokens seen
+                                         in the BEFORE pass, so the drift flag still prints (N-14).
+F-16 Benchmark subprocess crash ........ NOT REPRODUCED in three runs; treated as closed.
+F-17 Refusals list unrelated sources ... PARTLY FIXED. Sources is labelled "retrieved, not used", but
+                                         _is_refusal has false positives and misses (N-05).
+
+Answer to "are the run-2 fixes in the code": F-02, F-09, F-10, F-11, F-12, F-13, F-14 and
+F-16 are fixed. F-01, F-04, F-06, F-07, F-08, F-15 and F-17 are partly fixed. F-03 and F-05
+are in the code but do not work. Section 4.5 of the design (sort before the model) is now
+implemented.
+
+5B. NEW FINDINGS IN RUN 3
+
+N-01  Fuzzy cache no longer matches a close paraphrase  [Major]  TC-045, warm benchmark
+      The tokenizer keeps two-character tokens now, so "Tell me the main idea..." adds "me" to the
+      token set. Jaccard overlap falls from 6/7 (0.857) to 6/8 (0.75), under the 0.8 threshold. The
+      warm benchmark pass makes model calls for two of three paraphrases.
+      Fix: build the cache key with its own helper that ignores tokens of two characters or fewer and
+      a short filler list (tell, me, please, give, show, explain, describe, say). Add the TC-045 pair
+      to the conv-check.
+
+N-02  Follow-up logic fails on simple follow-ups  [Blocking]  TC-026, 059, 069, 111
+      _has_own_topic treats any two content words as a topic, so "What year was that paper
+      published?" (year, published) and "And who wrote that one?" (wrote, one) are called
+      self-contained and the previous paper is not added to the query. answer_items returns
+      ["2022-2025"] for a bullet list that starts with years, so "the second one" cannot be resolved.
+      Fix: test for an anaphora word first (that, this, it, its, they, those, "the first/second/last
+      one", "same paper"); if present, always add the previous paper. Make answer_items skip a leading
+      year and take the title or label that follows it. Add the three questions to the conv-check.
+
+N-03  Comparison with one missing side refuses everything  [Blocking]  TC-015, 084, 085
+      When the passages cover only one of the two things compared, the model answers "the documents do
+      not cover X" and describes neither. Fix: add a rule to the compare addendum (describe the side
+      that was found, say which was not found), and for "X and Y" questions retrieve once per side.
+
+N-04  Quotation support counts wrongly  [Major]  TC-030, 014, 108
+      _quoted_spans pairs the closing quote of a short quoted word with the next opening quote and
+      returns the text between them as a "quote". A real sentence is then not counted (0/4 for a
+      verified sentence). Ellipses split one real quote into two parts, giving 2/3.
+      Fix: pair quote characters left to right, then filter by length (20 or more characters); split
+      on "..." and the ellipsis character and check each part of 20 or more characters.
+
+N-05  _is_refusal false positives and misses  [Minor]  TC-017, 029, 086
+      Answers that contain "do not cover" inside a useful sentence are treated as refusals, and
+      answers such as "was not retrieved" are not. Fix: test only the first sentence, and add the
+      "was not retrieved / not found in the collection" wordings.
+
+N-06  Retrieval junk after the sanitizer removes a block  [Major]  TC-035, 096
+      The lead-in "Using the e-mails as context" is stemmed to "e-mail" after the generic-word
+      filter, so editors' e-mail lines in proceedings front matter score 22 to 27 against 15 for the
+      sketching papers. The model then refuses a sketching question that the sanitizer left intact.
+      Fix: apply the generic-word filter to the stemmed term as well, add e-mail words to it, and
+      when the sanitizer removed a block, drop the lead-in clause before retrieval.
+
+N-07  Duplicate and preprint copies not explained to the model  [Major]  TC-054, 022, 021, 058
+      Aliases are collapsed in the index but the model is not told that a work exists under several
+      file names. TC-054 invents a "journal version" with its own numbers. TC-022 writes a paper as
+      the follow-up of itself. Fix: in the turn rules, name the aliases of each retrieved work and
+      tell the model they are one work; in trend intent group by normalized title before the prompt.
+
+N-08  Trend relevance gate too weak  [Blocking]  TC-089, 019
+      A passage passes if it contains any topic word, so "sketch recognition research" is written
+      from RNN, CAD and program-sketch papers. Fix: require every distinctive topic term (or two of
+      them), count distinct dated works that pass, and if fewer than three return a fixed "too few
+      papers" reply without a model call. For two year ranges in one question, retrieve once per range.
+
+N-09  Catalog route takes topic-plus-year questions  [Minor]  TC-046
+      A question such as "papers on sketching in 2016" is answered by counting 2016 papers. Fix:
+      route to the catalog only when the question has no topic term besides year words.
+
+N-10  Question that names a proceedings volume gets nothing  [Major]  TC-057
+      The volume cap (budget 1, factor 0.8, chunks with n=1 excluded) also blocks a question that
+      names "CAV 2021 proceedings volume". Fix: if the question matches a volume label, retrieve up to
+      four chunks from that volume with no penalty.
+
+N-11  Bibliographic questions answered from reference lists  [Major]  TC-008
+      "What year / which conference was X published" is answered from a citation in another paper
+      (ASPLOS 2006 instead of PLDI 2005). Fix: answer from metadata (display_label plus venue parsed
+      from the id) without a model call, and add a prompt rule that a paper's year is the year
+      attribute of its own passage tag.
+
+N-12  File-name or garbled labels remain  [Minor]  TC-068
+      Nine files whose id ends in _YYYY (aplas_2009, cav_2011, cav_2012, cav_2015, hvc_2012,
+      ppsn_2014, sat_2012, sat_2016, vmcai_2014) are shown by file name, and one title is an author
+      line ("Kevin Ellis*..."). Fix: treat those ids as volumes and add display-title overrides.
+
+N-13  sources_block title-key dedupe can drop the cited label  [Minor]  TC-021, 068
+      When two ids share a title key, the one kept may not be the one cited inline. Fix: keep the id
+      that the answer cited, then the first.
+
+N-14  BASELINE_MAX_TOKENS below the observed BEFORE pass  [Minor]  TC-050, benchmark
+      The constant is 1,100,000; the BEFORE pass used about 1.17M tokens, so the drift flag still
+      prints. Fix: set it from the measured pass with a margin, for example 1,400,000.
+
+N-15  Raw DBLP id in prose  [Minor]  TC-058
+      "DBLP_conf_cav_..." appears in the answer text. Fix: have rewrite_inline_citations replace any
+      bare corpus id with its display label.
+
+N-16  Workbook and harness items  [see section 6 and 7]  TC-035, 054, 072, 119, 025, 088, 091, 050
+
+Positive controls for the recording: TC-001, 009, 020, 027, 029, 036 to 040, 044, 070,
+078, 092, 093, 094, 125.
+
+
+======================================================================
+6. REVIEW OF THE TEST HARNESS
+======================================================================
+
+H-01 to H-08 from run 2 are in place. Remaining issues:
+
+H-09  TC-035: the check passes when no injected word appears. The criterion also needs sketching
+      content, and the reply was a refusal. Add a check that the answer contains "sketch".
+H-10  TC-054: the check only looks for a duplicate title in Sources. Add a check that the answer
+      says the two files are the same work and has no "journal version" contrast.
+H-11  TC-072: the baseline is out of date (see section 7), so the harness reports Fail for a
+      corpus that is correct.
+H-12  TC-119: the stage order in the row contradicts design step 6 (sort and cap before the model).
+      The harness reports Fail for correct code.
+H-13  TC-026 returns an empty F in the harness; it should assert the title of the second item of
+      turn 1 appears in turn 2.
+
+Harness results I overrode: TC-035 and TC-054 (Pass to Fail), TC-072 and TC-119 (Fail to Pass),
+TC-107 and TC-125 (empty or manual to Pass, evidence in column J).
+
+
+======================================================================
+7. CHANGES NEEDED IN THE TEST WORKBOOK ITSELF
+======================================================================
+
+- TC-072: the text baseline is now 18,355,857 characters (after extraction repair), not 18,398,803.
+- TC-088 should count 13 distinct works. TC-091 should count 9 works (11 files). TC-025 should
+  expect 47 distinct works for 2016, not 59 files.
+- TC-119: change the stage order to match design step 6.
+- TC-050: set the ceiling from the observed BEFORE pass (about 1.17M tokens).
+- Corpus Facts: year counts still use filename years; recompute from the content year.
+
+These are recorded in the Change Log and Corpus Facts sheets of the graded workbook.
+
+
+======================================================================
+8. SUGGESTED ORDER OF FIXES
+======================================================================
+
+1. N-02 follow-up logic         (TC-026, 059, 068, 069, 111; restores four run-2 passes)
+2. N-01 cache key               (TC-045 and the warm benchmark)
+3. N-06 retrieval junk          (TC-035, 096)
+4. N-03 comparison with a missing side  (TC-015, 084, 085)
+5. N-08 trend gate and N-07 alias note  (TC-089, 019, 022, 054)
+6. N-04 quote spans             (TC-030, 014, 108)
+7. N-10 volume question and N-11 metadata route  (TC-057, 008)
+8. N-12, N-13, N-15 labels      (TC-068, 021, 058)
+9. N-05, N-09, N-14, then re-run.
+
+After items 1 to 5 the 18 failing rows should drop to about 3 (TC-008, 057 and 030 depend on
+items 6 and 7). Then run the manual rows (TC-065, 114, 120 to 124) and the README rows (TC-071,
+126), which are the remaining Not Run cases.
