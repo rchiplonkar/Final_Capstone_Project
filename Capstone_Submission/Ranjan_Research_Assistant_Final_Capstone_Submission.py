@@ -8,9 +8,9 @@ notebook cells in VS Code, PyCharm, or JupyterLab with Jupytext installed.
 Baseline behavior already working in this file: real-PDF corpus loading with
 a text cache, a BM25 chunk retriever, a heuristic direct/agent router, a
 fuzzy guarded answer cache, an XML-structured trust boundary against prompt
-injection, a dual-model cost split (a cheap planner model and a stronger
-answer model, deliberately configured here as gpt-5.4-nano for planning and
-gpt-5.4-mini for answering), a quote-support groundedness check, and a
+injection, a dual-model cost split (a cheaper answer model and a costlier
+planner model, each configured in .env; this submission runs openai/gpt-4o-mini
+for answering and openai/gpt-5.4-nano for planning), a quote-support groundedness check, and a
 benchmark/probe harness. See the Setup section below to run it, and the
 implemented-work checklist near the end of the file for the 8.1 additions
 (publication-year resolution, reader-facing citations, intent-aware prompting,
@@ -166,7 +166,7 @@ if fitz is None and PdfReader is None:
 
 # %%
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = "openai/gpt-5.4-mini"
+LLM_MODEL = "openai/gpt-4o-mini"
 # Built-in default names, used only for labels and price lookup when .env does not say
 # otherwise. The models actually called come from .env (see make_llm / model_names): the
 # cheaper answer model (OPENROUTER_*) writes the final grounded answer, the costlier
@@ -779,6 +779,8 @@ _GENERIC_QUERY_WORDS = {
     "quote", "quotes", "quoted", "exact", "direct", "definition", "say", "says", "based",
     "research", "time", "times", "year", "years", "work", "works", "papers", "paper",
     "evolution", "evolving", "history", "historical", "trend", "trends", "around",
+    # D-1: like "evolve", these describe the question, not its topic.
+    "change", "changes", "changed",
 }
 # Vocabulary the question may not share with the passages that answer it.
 _QUERY_EXPANSIONS = {
@@ -1176,7 +1178,7 @@ class SimpleCache:
 # is not enough (compare/contrast, changes over time, "which papers ...").
 _MULTI_HOP_RE = re.compile(
     r"(?i)\b(compare|contrast|differ|differs|difference|differences|versus|vs|across|trend|trends|"
-    r"over time|evolve|evolved|changed|relationship|which papers|which research)\b"
+    r"over time|evolve|evolved|change|changes|changed|relationship|which papers|which research)\b"
 )
 
 
@@ -1216,6 +1218,7 @@ def _total_tokens(usage: dict[str, int]) -> int:
 
 # Per-token USD prices (OpenRouter /models when reachable, hardcoded fallbacks otherwise).
 _FALLBACK_PRICES = {
+    "openai/gpt-4o-mini": (1.5e-7, 6.0e-7),
     "openai/gpt-5.4-mini": (7.5e-7, 4.5e-6),
     "openai/gpt-5.4-nano": (2.0e-7, 1.25e-6),
 }
@@ -1301,8 +1304,9 @@ def decide(llm: ChatOpenAI, question: str, collected: dict[str, str],
 
 
 def _answer_messages(question: str, items: list[tuple[str, str]], hardened: bool,
-                     history_block: str = "", intent: str = "single") -> list:
-    extra_rules = _turn_rules(question, items, hardened)
+                     history_block: str = "", intent: str = "single",
+                     year_range: tuple[int, int] | None = None) -> list:
+    extra_rules = _turn_rules(question, items, hardened, year_range)
     if hardened:
         system = build_system_prompt(hardened, intent, bool(history_block), question, extra_rules)
         user_content = _xml_prompt(_format_docs_xml(items), question)
@@ -1317,11 +1321,17 @@ def _answer_messages(question: str, items: list[tuple[str, str]], hardened: bool
     return [SystemMessage(content=system), HumanMessage(content=user_content)]
 
 
-def _turn_rules(question: str, items: list[tuple[str, str]], hardened: bool) -> str:
+def _turn_rules(question: str, items: list[tuple[str, str]], hardened: bool,
+                year_range: tuple[int, int] | None = None) -> str:
     """Instructions that depend on what this turn actually retrieved."""
     if not hardened:
         return ""
     rules = ""
+    if year_range:
+        rules += (f" The user limited the question to papers dated {_year_range_phrase(year_range)}; "
+                  "only passages from papers in that range were provided. List only those papers, "
+                  "give each the year attribute of its passage, and if no passage is about the "
+                  "topic asked, say that the collection has no such paper in that period.")
     if any(_flag_injection(text) for _, text in items):
         rules += _INJECTION_NOTE_ADDENDUM
     doc_ids = [key.split("#", 1)[0] for key, _ in items]
@@ -1478,7 +1488,8 @@ def agentic_answer(llm: ChatOpenAI, question: str, *, planner: ChatOpenAI | None
                    chunks: bool = False, hardened: bool = False,
                    verbose: bool = True, history_block: str = "",
                    intent: str = "single", retrieval_query: str | None = None,
-                   k: int = 4, per_doc: int = 2) -> tuple[str, dict[str, int]]:
+                   k: int = 4, per_doc: int = 2,
+                   year_range: tuple[int, int] | None = None) -> tuple[str, dict[str, int]]:
     """The full multistep agent, tracking planner vs. answer tokens (the expensive path).
 
     Default arguments reproduce the unhardened baseline behavior (whole-paper text, one
@@ -1490,7 +1501,12 @@ def agentic_answer(llm: ChatOpenAI, question: str, *, planner: ChatOpenAI | None
     planner = planner or llm
     collected: dict[str, str] = {}
     executed: list[str] = []
+    # Year filter for every retrieval in the loop. A trend question with explicit ranges keeps
+    # planner follow-up queries inside the overall span it asked about (TC-020 got a 2026 paper).
+    loop_range = year_range
     if chunks and intent == "trend":
+        spans = [r for _, r in _trend_query_specs(question) if r]
+        loop_range = (min(r[0] for r in spans), max(r[1] for r in spans)) if spans else None
         for hit in _trend_hits(question, k, per_doc):
             collected[_item_key(hit)] = hit["text"]
         executed = [query for query, _ in _trend_query_specs(question)]
@@ -1513,7 +1529,7 @@ def agentic_answer(llm: ChatOpenAI, question: str, *, planner: ChatOpenAI | None
         for q in pending:
             if chunks:
                 query_k = 2 if intent == "compare" and step == 0 and len(pending) == 2 else k
-                hits = retrieve_chunks(q, k=query_k, per_doc=per_doc)
+                hits = retrieve_chunks(q, k=query_k, per_doc=per_doc, year_range=loop_range)
                 for h in hits:
                     collected[_item_key(h)] = h["text"]
                 ids = [_item_key(h) for h in hits]
@@ -1540,7 +1556,10 @@ def agentic_answer(llm: ChatOpenAI, question: str, *, planner: ChatOpenAI | None
                 break
         pending = new_q
     items = _prepare_items(list(collected.items()), intent, question)
-    resp = llm.invoke(_answer_messages(question, items, hardened, history_block, intent))
+    if year_range and intent != "trend":
+        items = _year_topic_filter(items, question)
+    resp = llm.invoke(_answer_messages(question, items, hardened, history_block, intent,
+                                       year_range if intent != "trend" else None))
     answer = _trend_answer_or_reject(resp.content, items, intent)
     au = _usage(resp)
     usage["answer_input"] = au["input"]
@@ -1554,7 +1573,8 @@ def agentic_answer(llm: ChatOpenAI, question: str, *, planner: ChatOpenAI | None
 def answer_direct(llm: ChatOpenAI, question: str, *, chunks: bool = False,
                   hardened: bool = False, history_block: str = "",
                   intent: str = "single", retrieval_query: str | None = None,
-                  k: int = 4, per_doc: int = 2) -> tuple[str, dict[str, int]]:
+                  k: int = 4, per_doc: int = 2,
+                  year_range: tuple[int, int] | None = None) -> tuple[str, dict[str, int]]:
     """The cheap path the router picks for simple one-hop questions: one retrieve, one call."""
     usage = _zero_usage()
     query = retrieval_query or question
@@ -1570,17 +1590,21 @@ def answer_direct(llm: ChatOpenAI, question: str, *, chunks: bool = False,
     elif chunks and intent == "compare" and len(_comparison_queries(question)) == 2:
         collected = {}
         for side in _comparison_queries(question):
-            for hit in retrieve_chunks(side, k=2, per_doc=per_doc):
+            for hit in retrieve_chunks(side, k=2, per_doc=per_doc, year_range=year_range):
                 collected[_item_key(hit)] = hit["text"]
             ACTION_LOG.append({"step": 1, "query": side[:120],
                                "retrieved": [_short(key) for key in collected]})
     elif chunks:
-        collected = {_item_key(h): h["text"] for h in retrieve_chunks(query, k=k, per_doc=per_doc)}
+        collected = {_item_key(h): h["text"]
+                     for h in retrieve_chunks(query, k=k, per_doc=per_doc, year_range=year_range)}
     else:
         collected = {i: DOC_BY_ID[i]["text"] for i in retrieve(query, k=3)}
     ACTION_LOG.append({"step": 1, "query": query[:120], "retrieved": [_short(i) for i in collected]})
     items = _prepare_items(list(collected.items()), intent, question)
-    resp = llm.invoke(_answer_messages(question, items, hardened, history_block, intent))
+    if year_range and intent != "trend":
+        items = _year_topic_filter(items, question)
+    resp = llm.invoke(_answer_messages(question, items, hardened, history_block, intent,
+                                       year_range if intent != "trend" else None))
     answer = _trend_answer_or_reject(resp.content, items, intent)
     au = _usage(resp)
     usage["answer_input"] = au["input"]
@@ -2277,7 +2301,7 @@ HISTORY_MAX_TURNS = 3
 HISTORY_SUMMARY_CHARS = 200
 HISTORY_QUESTION_CHARS = 100
 _TREND_RE = re.compile(
-    r"(?i)\b(trend|trends|over time|evolve|evolved|changed|history|historical)\b"
+    r"(?i)\b(trend|trends|over time|evolve|evolved|change|changes|changed|history|historical)\b"
 )
 _COMPARE_ADDENDUM = (
     " This question asks you to compare sources. Structure your answer explicitly: address "
@@ -2387,7 +2411,10 @@ def _comparison_queries(question: str) -> list[str]:
     return [question]
 
 
-_TREND_RANGE_RE = re.compile(r"\b((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})\b")
+# "2005-2008", "2005 to 2020", "between 2005 and 2020" (D-1: only the hyphen form was parsed).
+_TREND_RANGE_RE = re.compile(
+    r"\b((?:19|20)\d{2})\s*(?:[-–]|to|through|until|and)\s*((?:19|20)\d{2})\b"
+)
 
 
 def _trend_query_specs(question: str) -> list[tuple[str, tuple[int, int] | None]]:
@@ -2416,8 +2443,12 @@ def _trend_query_specs(question: str) -> list[tuple[str, tuple[int, int] | None]
             expanded_terms.extend(_QUERY_EXPANSIONS.get(term, ()))
         if "llm" in topic_terms and "code" in topic_terms:
             expanded_terms.extend(("reasoning", "understanding", "execution", "benchmark"))
-        years = " ".join(str(year) for year in range(lo, hi + 1))
-        specs.append((" ".join((*dict.fromkeys(expanded_terms), years)), (lo, hi)))
+        # Spelling the years out helps a short era ("2005-2008"), but for a long span the year
+        # tokens outweigh the topic words and pull in reference lists (TC-145: 16 year tokens
+        # for 2005-2020 pushed the 2009 sketching paper out). The year_range filter already
+        # restricts long spans, so their query keeps only the topic words.
+        years = " ".join(str(year) for year in range(lo, hi + 1)) if hi - lo <= 5 else ""
+        specs.append((" ".join(t for t in (*dict.fromkeys(expanded_terms), years) if t), (lo, hi)))
     return specs
 
 
@@ -2810,6 +2841,7 @@ def answer_direct_conversational(
     return answer_direct(
         llm, question, chunks=True, hardened=True, history_block=history_block,
         intent=intent, retrieval_query=retrieval_query, k=k, per_doc=per_doc,
+        year_range=_question_year_range(question) if intent != "trend" else None,
     )
 
 
@@ -2823,6 +2855,7 @@ def agentic_answer_conversational(
         llm, question, planner=planner, chunks=True, hardened=True, verbose=verbose,
         history_block=history_block, intent=intent, retrieval_query=retrieval_query,
         k=k, per_doc=per_doc,
+        year_range=_question_year_range(question) if intent != "trend" else None,
     )
 
 
@@ -2928,6 +2961,82 @@ def _catalog_select(entries: list[tuple[str, int | None]], word: str,
     return [(doc_id, y) for doc_id, y in entries if keep(y)]
 
 
+# A topic question restricted by publication date ("which papers published after 2010 discuss
+# sketching?") cannot use the catalog (it has a topic) and must not let the model see papers
+# from other years, so the constraint becomes a retrieval filter. Trend questions keep their own
+# per-range retrieval (_trend_query_specs) and do not use this.
+_PUBLICATION_CUE_RE = re.compile(
+    r"(?i)\b(?:papers?|works?|stud(?:y|ies)|articles?|publications?|published|appeared|dated|written)\b"
+)
+YEAR_FILTER_MIN, YEAR_FILTER_MAX = 1900, 2100
+
+
+def _question_year_range(question: str) -> tuple[int, int] | None:
+    """Publication-year range a non-trend question restricts itself to, or None."""
+    if not _PUBLICATION_CUE_RE.search(question):
+        return None
+    span = _SPAN_RE.search(question)
+    if span:
+        lo, hi = sorted((int(span.group(1)), int(span.group(2))))
+        return lo, hi
+    ranges = _RANGE_RE.findall(question)
+    if len(ranges) != 1:
+        return None
+    word, year_text = ranges[0][0].lower(), int(ranges[0][1])
+    if word == "from" and _ONWARD_RE.search(question):
+        word = "since"
+    if word in ("before", "prior to", "up to", "until", "older than"):
+        return YEAR_FILTER_MIN, year_text - 1
+    if word in ("after", "newer than"):
+        return year_text + 1, YEAR_FILTER_MAX
+    if word == "since":
+        return year_text, YEAR_FILTER_MAX
+    return year_text, year_text            # in / during / from
+
+
+_PUBLICATION_WORDS = {"published", "publication", "publications", "appeared", "dated", "written",
+                      "papers", "paper", "works", "work", "studies", "study", "articles", "article",
+                      "collection", "corpus", "which", "list", "name", "many"}
+
+
+def _term_stem(term: str) -> str:
+    for suffix in ("ing", "es", "ed", "s"):
+        if term.endswith(suffix) and len(term) - len(suffix) >= 4:
+            return term[: -len(suffix)]
+    return term
+
+
+def _year_topic_filter(items: list[tuple[str, str]], question: str) -> list[tuple[str, str]]:
+    """Keep passages that mention the question's most specific topic term.
+
+    A date filter guarantees the year, not the topic: a 2016 proceedings-volume passage about
+    SAT solving would otherwise be offered to the model as a "2016 sketching paper" (TC-133).
+    The most specific term is the topic word that occurs in the fewest chunks.
+    """
+    build_chunk_index()
+    terms = [t for t in dict.fromkeys(_tokens(question))
+             if t not in _GENERIC_QUERY_WORDS and t not in _PUBLICATION_WORDS and not t.isdigit()]
+    scored = [(len(_POSTINGS.get(t, ()) or _POSTINGS.get(_term_stem(t), ())), t) for t in terms]
+    scored = [(df, t) for df, t in scored if df]
+    if not scored:
+        return items
+    stem = _term_stem(min(scored)[1])
+    pattern = re.compile(rf"\b{re.escape(stem)}", re.IGNORECASE)
+    return [(key, text) for key, text in items
+            if pattern.search(text) or pattern.search(paper_title(key.split("#", 1)[0]))]
+
+
+def _year_range_phrase(year_range: tuple[int, int]) -> str:
+    lo, hi = year_range
+    if lo == hi:
+        return f"in {lo}"
+    if lo <= YEAR_FILTER_MIN:
+        return f"before {hi + 1}"
+    if hi >= YEAR_FILTER_MAX:
+        return f"in {lo} or later"
+    return f"between {lo} and {hi}"
+
+
 def _catalog_lines(question: str, selected: list[tuple[str, int | None]], phrase: str) -> str:
     if not selected:
         return f"No paper in the collection is dated {phrase}."
@@ -2999,11 +3108,17 @@ _BIBLIOGRAPHIC_QUESTION_RE = re.compile(
     r"(?i)\b(?:what year|which year|when (?:was|were)|what (?:conference|venue)|"
     r"which (?:conference|venue)|publication year|published)\b"
 )
+# D-2: "Which papers on sketching were published in 2016?" asks for a list filtered by year,
+# not for one paper's year and venue, so it must go to (year-filtered) retrieval.
+_LIST_QUESTION_RE = re.compile(
+    r"(?i)\b(?:which|what|list|name|how many)\b[^?]*"
+    r"\b(?:papers|works|articles|documents|studies|publications)\b"
+)
 
 
 def bibliographic_answer(question: str) -> tuple[str, list[str]] | None:
     """Answer a named paper's year and venue from its own corpus metadata."""
-    if not _BIBLIOGRAPHIC_QUESTION_RE.search(question):
+    if not _BIBLIOGRAPHIC_QUESTION_RE.search(question) or _LIST_QUESTION_RE.search(question):
         return None
     metadata_words = _GENERIC_QUERY_WORDS | {
         "what", "which", "when", "was", "were", "conference", "venue", "publication",
@@ -3039,6 +3154,9 @@ def bibliographic_answer(question: str) -> tuple[str, list[str]] | None:
 
     doc_id = candidates[0][1]
     year = YEAR_BY_DOC.get(doc_id)
+    asked_years = set(re.findall(r"\b(?:19|20)\d{2}\b", question))
+    if asked_years and str(year) not in asked_years:
+        return None     # the question names a different year: not a question about this paper
     venue_match = re.search(r"(?i)DBLP_(?:conf|series|journals)_([a-z0-9]+)_", doc_id)
     venue = venue_match.group(1).upper() if venue_match else ""
     if year is None and not venue:
@@ -3759,6 +3877,48 @@ def _review_fix_checks() -> list[tuple[str, bool]]:
                    and "e-mail" in _GENERIC_QUERY_WORDS
                    and "mail" in _GENERIC_QUERY_WORDS))
 
+    # D-1 (TC-145): "change" wording and "from YYYY to YYYY" ranges are change-over-time questions.
+    change_q = "How did program synthesis research change from 2005 to 2020?"
+    checks.append(("'change' wording is a trend question",
+                   classify_intent(change_q) == "trend" and route(change_q) == "agent"))
+    checks.append(("'from YYYY to YYYY' is parsed as a trend range",
+                   [r for _, r in _trend_query_specs(change_q)] == [(2005, 2020)]
+                   and [r for _, r in _trend_query_specs(
+                       "How did synthesis evolve between 2005 and 2010?")] == [(2005, 2010)]))
+    checks.append(("trend evidence stays inside the asked range",
+                   all(2005 <= (YEAR_BY_DOC.get(canonical_id(h["doc_id"])) or 0) <= 2020
+                       for h in _trend_hits(change_q, 6, 3))))
+    # D-2 (TC-133): a list question with a year never takes the single-paper metadata route.
+    checks.append(("year-filtered list question skips the metadata route",
+                   bibliographic_answer("Which papers on program sketching were published in 2016?")
+                   is None))
+    checks.append(("metadata route ignores a paper of a different year",
+                   bibliographic_answer("Which sketching paper was published in 2016?") is None))
+    # TC-133 / TC-046: a publication-date constraint filters retrieval and reaches the prompt.
+    after_q = "Which papers published after 2010 discuss sketching?"
+    checks.append(("question year constraint is parsed",
+                   _question_year_range(after_q) == (2011, YEAR_FILTER_MAX)
+                   and _question_year_range("Which papers on program sketching were published in 2016?")
+                   == (2016, 2016)
+                   and _question_year_range("What is the main idea of sketching?") is None))
+    checks.append(("year constraint filters retrieved papers",
+                   all((YEAR_BY_DOC.get(canonical_id(h["doc_id"])) or 0) > 2010
+                       for h in retrieve_chunks(after_q, k=6, per_doc=4,
+                                                year_range=_question_year_range(after_q)))))
+    checks.append(("date-filtered passages must mention the topic",
+                   [k for k, _ in _year_topic_filter(
+                       [("x#1", "We encode the problem as a Sketch program."),
+                        ("y#1", "SAT solvers and CNF encodings.")],
+                       "Which papers on program sketching were published in 2016?")] == ["x#1"]))
+    checks.append(("long trend spans are not padded with year tokens",
+                   not re.search(r"\b20\d\d\b", _trend_query_specs(change_q)[0][0])))
+    checks.append(("year constraint is stated in the prompt",
+                   "papers dated in 2011 or later" in _turn_rules(
+                       after_q, [], True, _question_year_range(after_q))))
+    # D-6: the default model names match the roles the configuration dialog describes.
+    checks.append(("default answer model is the cheaper one",
+                   _price(LLM_MODEL)[0] < _price(PLANNER_MODEL)[0]))
+
     # F-14: every supported mode is documented in the usage message.
     checks.append(("usage message lists every mode", all(
         mode in USAGE for mode in ("chat", "chat-cli", "benchmark", "conv-check", "conv-probes"))))
@@ -3992,8 +4152,11 @@ def run_conversation_probes(trials: int = 2) -> None:
         for pr in probes:
             poison = pr.get("poison")
             if poison:
-                def poisoned(query: str, k: int = 4, per_doc: int = 2, _p=poison) -> list[dict[str, Any]]:
-                    hits = real_retrieve(query, k=k, per_doc=per_doc)
+                # Same signature as retrieve_chunks: the answer paths pass year_range (D-8).
+                def poisoned(query: str, k: int = 4, per_doc: int = 2,
+                             year_range: tuple[int, int] | None = None,
+                             _p=poison) -> list[dict[str, Any]]:
+                    hits = real_retrieve(query, k=k, per_doc=per_doc, year_range=year_range)
                     return hits + [{"doc_id": "poisoned_passage", "n": 0, "text": _p,
                                     "len": len(_p), "score": 0}]
                 retrieve_chunks = poisoned
