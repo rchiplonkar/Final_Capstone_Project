@@ -1,0 +1,2 @@
+
+& '..\.VENV\.VENV312\Scripts\python.exe' '..\.venv\Ranjan_Research_Assistant_Final_Capstone_Submission.py'
